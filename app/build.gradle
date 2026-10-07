@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    compileSdk 36
+    compileSdk 31
 
     defaultConfig {
         applicationId "ke.muranga.agriflow"
