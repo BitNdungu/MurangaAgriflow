@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <color name="background">#101510</color>
+    <color name="surface">#18201B</color>
+
+    <color name="brand_green">#6FC58A</color>
+    <color name="brand_green_dark">#0B2F1B</color>
+    <color name="brand_green_light">#193B25</color>
+
+    <color name="gold">#E7B84E</color>
+    <color name="red">#E17A7A</color>
+
+    <color name="text_primary">#F1F4F1</color>
+    <color name="text_secondary">#AAB6AE</color>
+
+    <color name="border">#2D3931</color>
+
+    <color name="white">#FFFFFF</color>
+    <color name="button_text">#FFFFFF</color>
+
+    <color name="status_bar">#0B2F1B</color>
+
+</resources>

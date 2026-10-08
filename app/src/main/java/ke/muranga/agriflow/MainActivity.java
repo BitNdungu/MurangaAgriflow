@@ -1,233 +1,415 @@
 package ke.muranga.agriflow;
 
-import android.app.Activity;
-import android.graphics.Color;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
-import android.view.Window;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
-import android.widget.ScrollView;
 import android.widget.TextView;
 
-public class MainActivity extends Activity {
+import androidx.appcompat.app.AlertDialog;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
 
-    // ============================================================
-    // MURANG'A AGRIFLOW - FIRST REAL UI
-    // ============================================================
+public class MainActivity extends AppCompatActivity {
 
-    private static final int GREEN = Color.rgb(25, 105, 57);
-    private static final int GREEN_DARK = Color.rgb(18, 78, 43);
-    private static final int GREEN_LIGHT = Color.rgb(231, 244, 235);
+    public static final String HOME = "HOME";
+    public static final String FARM = "FARM";
+    public static final String MARKET = "MARKET";
+    public static final String ALERTS = "ALERTS";
+    public static final String PROFILE = "PROFILE";
 
-    private static final int GOLD = Color.rgb(224, 165, 48);
-    private static final int RED = Color.rgb(190, 67, 67);
+    private static final String PREFS_NAME = "agriflow_profile";
+    private static final String APPEARANCE_KEY = "appearance";
 
-    private static final int INK = Color.rgb(27, 43, 35);
-    private static final int TEXT = Color.rgb(60, 72, 65);
-    private static final int MUTED = Color.rgb(111, 123, 116);
+    private SharedPreferences preferences;
 
-    private static final int BACKGROUND = Color.rgb(247, 249, 247);
-    private static final int WHITE = Color.WHITE;
-    private static final int BORDER = Color.rgb(225, 231, 226);
-
-    private LinearLayout contentArea;
-    private final TextView[] navItems = new TextView[5];
+    private FrameLayout contentFrame;
+    private LinearLayout bottomNavigation;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+
+        applyStoredAppearance();
+
         super.onCreate(savedInstanceState);
 
-        Window window = getWindow();
-        window.setStatusBarColor(GREEN_DARK);
-        window.setNavigationBarColor(WHITE);
+        preferences = getSharedPreferences(
+                PREFS_NAME,
+                Context.MODE_PRIVATE
+        );
 
-        buildApplicationShell();
-        showHome();
-        selectTab(0);
+        buildMainLayout();
+        showScreen(HOME);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        updateStatusBar();
     }
 
     // ============================================================
-    // APP SHELL
+    // APPEARANCE
     // ============================================================
 
-    private void buildApplicationShell() {
+    private void applyStoredAppearance() {
+
+        SharedPreferences prefs = getSharedPreferences(
+                PREFS_NAME,
+                Context.MODE_PRIVATE
+        );
+
+        String appearance = prefs.getString(
+                APPEARANCE_KEY,
+                "system"
+        );
+
+        switch (appearance) {
+
+            case "light":
+                AppCompatDelegate.setDefaultNightMode(
+                        AppCompatDelegate.MODE_NIGHT_NO
+                );
+                break;
+
+            case "dark":
+                AppCompatDelegate.setDefaultNightMode(
+                        AppCompatDelegate.MODE_NIGHT_YES
+                );
+                break;
+
+            default:
+                AppCompatDelegate.setDefaultNightMode(
+                        AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+                );
+                break;
+        }
+    }
+
+    public String getAppearanceLabel() {
+
+        String appearance = preferences.getString(
+                APPEARANCE_KEY,
+                "system"
+        );
+
+        switch (appearance) {
+
+            case "light":
+                return "Light";
+
+            case "dark":
+                return "Dark";
+
+            default:
+                return "System default";
+        }
+    }
+
+    public void showAppearanceDialog() {
+
+        String[] labels = {
+                "System default",
+                "Light",
+                "Dark"
+        };
+
+        String[] values = {
+                "system",
+                "light",
+                "dark"
+        };
+
+        String current = preferences.getString(
+                APPEARANCE_KEY,
+                "system"
+        );
+
+        int checked = 0;
+
+        if ("light".equals(current)) {
+            checked = 1;
+        } else if ("dark".equals(current)) {
+            checked = 2;
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Appearance")
+                .setSingleChoiceItems(
+                        labels,
+                        checked,
+                        (d, which) -> {
+
+                            preferences.edit()
+                                    .putString(
+                                            APPEARANCE_KEY,
+                                            values[which]
+                                    )
+                                    .apply();
+
+                            d.dismiss();
+
+                            applyAppearance(values[which]);
+                        }
+                )
+                .setNegativeButton("Cancel", null)
+                .create();
+
+        dialog.show();
+    }
+
+    private void applyAppearance(String appearance) {
+
+        switch (appearance) {
+
+            case "light":
+                AppCompatDelegate.setDefaultNightMode(
+                        AppCompatDelegate.MODE_NIGHT_NO
+                );
+                break;
+
+            case "dark":
+                AppCompatDelegate.setDefaultNightMode(
+                        AppCompatDelegate.MODE_NIGHT_YES
+                );
+                break;
+
+            default:
+                AppCompatDelegate.setDefaultNightMode(
+                        AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+                );
+                break;
+        }
+    }
+
+    private void updateStatusBar() {
+
+        getWindow().setStatusBarColor(
+                color(R.color.status_bar)
+        );
+
+        // Keep white status-bar icons.
+        int flags = getWindow()
+                .getDecorView()
+                .getSystemUiVisibility();
+
+        flags &= ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+
+        getWindow()
+                .getDecorView()
+                .setSystemUiVisibility(flags);
+    }
+
+    // ============================================================
+    // MAIN LAYOUT
+    // ============================================================
+
+    private void buildMainLayout() {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(BACKGROUND);
-
-        ScrollView scrollView = new ScrollView(this);
-        scrollView.setFillViewport(true);
-        scrollView.setBackgroundColor(BACKGROUND);
-
-        contentArea = new LinearLayout(this);
-        contentArea.setOrientation(LinearLayout.VERTICAL);
-        contentArea.setPadding(
-                dp(20),
-                dp(18),
-                dp(20),
-                dp(24)
+        root.setBackgroundColor(
+                color(R.color.background)
         );
 
-        scrollView.addView(contentArea);
+        contentFrame = new FrameLayout(this);
+        contentFrame.setBackgroundColor(
+                color(R.color.background)
+        );
 
         root.addView(
-                scrollView,
+                contentFrame,
                 new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
                         0,
                         1
                 )
         );
 
-        // Bottom navigation
-        LinearLayout bottomNav = new LinearLayout(this);
-        bottomNav.setOrientation(LinearLayout.HORIZONTAL);
-        bottomNav.setGravity(Gravity.CENTER);
-        bottomNav.setPadding(
-                dp(8),
-                dp(7),
-                dp(8),
-                dp(7)
-        );
-        bottomNav.setBackgroundColor(WHITE);
-
-        bottomNav.addView(
-                createNavItem(
-                        "⌂",
-                        "Home",
-                        0,
-                        v -> {
-                            showHome();
-                            selectTab(0);
-                        }
-                )
-        );
-
-        bottomNav.addView(
-                createNavItem(
-                        "✿",
-                        "Farm",
-                        1,
-                        v -> {
-                            showFarm();
-                            selectTab(1);
-                        }
-                )
-        );
-
-        bottomNav.addView(
-                createNavItem(
-                        "▣",
-                        "Market",
-                        2,
-                        v -> {
-                            showMarket();
-                            selectTab(2);
-                        }
-                )
-        );
-
-        bottomNav.addView(
-                createNavItem(
-                        "!",
-                        "Alerts",
-                        3,
-                        v -> {
-                            showAlerts();
-                            selectTab(3);
-                        }
-                )
-        );
-
-        bottomNav.addView(
-                createNavItem(
-                        "●",
-                        "Profile",
-                        4,
-                        v -> {
-                            showProfile();
-                            selectTab(4);
-                        }
-                )
-        );
+        bottomNavigation = createBottomNavigation();
 
         root.addView(
-                bottomNav,
+                bottomNavigation,
                 new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        dp(72)
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        dp(68)
                 )
         );
 
         setContentView(root);
     }
 
-    private TextView createNavItem(
-            String icon,
-            String label,
-            int index,
-            View.OnClickListener listener
-    ) {
+    // ============================================================
+    // SCREEN NAVIGATION
+    // ============================================================
 
-        TextView item = new TextView(this);
+    public void showScreen(String screen) {
 
-        item.setText(icon + "\n" + label);
-        item.setGravity(Gravity.CENTER);
-        item.setTextSize(11);
-        item.setTypeface(null, Typeface.BOLD);
-        item.setPadding(
-                dp(4),
-                dp(5),
-                dp(4),
-                dp(5)
-        );
-        item.setLineSpacing(0, 0.9f);
-        item.setOnClickListener(listener);
+        View screenView;
 
-        item.setLayoutParams(
-                new LinearLayout.LayoutParams(
-                        0,
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        1
+        switch (screen) {
+
+            case FARM:
+                screenView = new FarmScreen(this);
+                break;
+
+            case MARKET:
+                screenView = new MarketScreen(this);
+                break;
+
+            case ALERTS:
+                screenView = new AlertsScreen(this);
+                break;
+
+            case PROFILE:
+                screenView = new ProfileScreen(this);
+                break;
+
+            default:
+                screenView = new HomeScreen(this);
+                break;
+        }
+
+        contentFrame.removeAllViews();
+
+        contentFrame.addView(
+                screenView,
+                new FrameLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
                 )
         );
 
-        navItems[index] = item;
-
-        return item;
+        updateBottomNavigation(screen);
     }
 
-    private void selectTab(int selectedIndex) {
+    // ============================================================
+    // BOTTOM NAVIGATION
+    // ============================================================
 
-        for (int i = 0; i < navItems.length; i++) {
+    private LinearLayout createBottomNavigation() {
 
-            TextView item = navItems[i];
+        LinearLayout nav = new LinearLayout(this);
 
-            if (i == selectedIndex) {
+        nav.setOrientation(LinearLayout.HORIZONTAL);
+        nav.setGravity(Gravity.CENTER);
+        nav.setBackgroundColor(
+                color(R.color.surface)
+        );
 
-                item.setTextColor(GREEN);
+        nav.addView(
+                navButton("HOME", HOME),
+                new LinearLayout.LayoutParams(0, dp(58), 1)
+        );
+
+        nav.addView(
+                navButton("FARM", FARM),
+                new LinearLayout.LayoutParams(0, dp(58), 1)
+        );
+
+        nav.addView(
+                navButton("MARKET", MARKET),
+                new LinearLayout.LayoutParams(0, dp(58), 1)
+        );
+
+        nav.addView(
+                navButton("ALERTS", ALERTS),
+                new LinearLayout.LayoutParams(0, dp(58), 1)
+        );
+
+        nav.addView(
+                navButton("PROFILE", PROFILE),
+                new LinearLayout.LayoutParams(0, dp(58), 1)
+        );
+
+        return nav;
+    }
+
+    private TextView navButton(
+            String label,
+            String destination
+    ) {
+
+        TextView button = new TextView(this);
+
+        button.setText(label);
+        button.setGravity(Gravity.CENTER);
+        button.setTextSize(11);
+        button.setTypeface(
+                Typeface.DEFAULT,
+                Typeface.BOLD
+        );
+
+        button.setTextColor(
+                color(R.color.text_primary)
+        );
+
+        button.setPadding(
+                dp(4),
+                dp(8),
+                dp(4),
+                dp(8)
+        );
+
+        button.setOnClickListener(
+                v -> showScreen(destination)
+        );
+
+        return button;
+    }
+
+    private void updateBottomNavigation(
+            String activeScreen
+    ) {
+
+        for (int i = 0;
+             i < bottomNavigation.getChildCount();
+             i++) {
+
+            View view =
+                    bottomNavigation.getChildAt(i);
+
+            if (!(view instanceof TextView)) {
+                continue;
+            }
+
+            TextView item =
+                    (TextView) view;
+
+            String label =
+                    item.getText().toString();
+
+            if (label.equals(activeScreen)) {
+
+                item.setTextColor(
+                        color(R.color.brand_green)
+                );
 
                 item.setBackground(
                         roundedBackground(
-                                GREEN_LIGHT,
-                                18,
-                                GREEN_LIGHT
+                                color(R.color.brand_green_light),
+                                14
                         )
                 );
 
             } else {
 
-                item.setTextColor(MUTED);
+                item.setTextColor(
+                        color(R.color.text_primary)
+                );
 
                 item.setBackground(
                         roundedBackground(
-                                WHITE,
-                                18,
-                                WHITE
+                                color(R.color.surface),
+                                14
                         )
                 );
             }
@@ -235,926 +417,459 @@ public class MainActivity extends Activity {
     }
 
     // ============================================================
-    // HOME
+    // SHARED STORAGE
     // ============================================================
 
-    private void showHome() {
+    public SharedPreferences getPreferencesStore() {
+        return preferences;
+    }
 
-        clearContent();
+    // ============================================================
+    // SHARED UI HELPERS
+    // ============================================================
 
-        TextView county = smallLabel("MURANG'A COUNTY");
-        contentArea.addView(county);
+    public int color(int resourceId) {
+        return getResources().getColor(resourceId);
+    }
 
-        TextView appName = heading("AGRIFLOW");
-        appName.setTextSize(25);
-        contentArea.addView(appName);
+    public int dp(int value) {
 
-        TextView welcome = bodyText(
-                "Agricultural intelligence for better farming decisions."
+        float density =
+                getResources()
+                        .getDisplayMetrics()
+                        .density;
+
+        return Math.round(value * density);
+    }
+
+    public TextView text(
+            String value,
+            float size,
+            int colorResource,
+            int typeface
+    ) {
+
+        TextView view =
+                new TextView(this);
+
+        view.setText(value);
+        view.setTextSize(size);
+        view.setTextColor(
+                color(colorResource)
+        );
+        view.setTypeface(
+                Typeface.DEFAULT,
+                typeface
         );
 
-        contentArea.addView(
-                welcome,
-                marginParams(0, 0, 0, dp(16))
+        return view;
+    }
+
+    public LinearLayout card() {
+
+        LinearLayout card =
+                new LinearLayout(this);
+
+        card.setOrientation(
+                LinearLayout.VERTICAL
         );
 
-        // Hero
-        LinearLayout hero = new LinearLayout(this);
-        hero.setOrientation(LinearLayout.VERTICAL);
-        hero.setPadding(
-                dp(22),
-                dp(22),
-                dp(22),
-                dp(22)
-        );
-
-        hero.setBackground(
-                roundedBackground(
-                        GREEN,
-                        22,
-                        GREEN
-                )
-        );
-
-        TextView heroTitle = textView(
-                "Grow with better information.",
-                23,
-                WHITE
-        );
-
-        heroTitle.setTypeface(null, Typeface.BOLD);
-
-        TextView heroBody = textView(
-                "Track your farm, understand markets, "
-                        + "spot problems early and stay informed.",
-                15,
-                Color.rgb(226, 241, 230)
-        );
-
-        heroBody.setPadding(
-                0,
-                dp(10),
-                0,
+        card.setPadding(
+                dp(18),
+                dp(18),
+                dp(18),
                 dp(18)
         );
 
-        TextView profileButton = actionButton(
-                "Set up your farm profile  →",
-                WHITE,
-                GREEN_DARK
-        );
-
-        profileButton.setOnClickListener(
-                v -> showProfile()
-        );
-
-        hero.addView(heroTitle);
-        hero.addView(heroBody);
-        hero.addView(profileButton);
-
-        contentArea.addView(
-                hero,
-                marginParams(0, 0, 0, dp(22))
-        );
-
-        // Quick actions
-        addSectionTitle("Quick actions");
-
-        LinearLayout actions = horizontalContainer();
-
-        actions.addView(
-                smallAction(
-                        "＋",
-                        "Add crop",
-                        GREEN,
-                        v -> showFarm()
-                )
-        );
-
-        actions.addView(
-                smallAction(
-                        "!",
-                        "Report issue",
-                        RED,
-                        v -> showAlerts()
-                )
-        );
-
-        actions.addView(
-                smallAction(
-                        "▣",
-                        "Check market",
-                        GOLD,
-                        v -> showMarket()
-                )
-        );
-
-        contentArea.addView(
-                actions,
-                marginParams(0, 0, 0, dp(14))
-        );
-
-        // Farm snapshot
-        addSectionTitle("Your farm at a glance");
-
-        LinearLayout snapshot = cardContainer();
-
-        snapshot.addView(
-                metricBlock("0", "Crops")
-        );
-
-        snapshot.addView(metricDivider());
-
-        snapshot.addView(
-                metricBlock("—", "Farm size")
-        );
-
-        snapshot.addView(metricDivider());
-
-        snapshot.addView(
-                metricBlock("—", "Next harvest")
-        );
-
-        contentArea.addView(
-                snapshot,
-                marginParams(0, 0, 0, dp(14))
-        );
-
-        // Attention
-        addSectionTitle("Needs your attention");
-
-        contentArea.addView(
-                informationCard(
-                        "Complete your farmer profile",
-                        "Add your location, farm size and enterprises "
-                                + "so Agriflow can provide more useful information.",
-                        "Get started  →",
-                        GREEN,
-                        v -> showProfile()
-                )
-        );
-
-        // Market
-        addSectionTitle("Market intelligence");
-
-        contentArea.addView(
-                informationCard(
-                        "Your market view",
-                        "Crop prices and market opportunities will appear "
-                                + "here once market data is connected.",
-                        "Open market  →",
-                        GOLD,
-                        v -> showMarket()
-                )
-        );
-
-        // Alerts
-        addSectionTitle("Alerts");
-
-        contentArea.addView(
-                informationCard(
-                        "Stay informed",
-                        "Important agricultural, weather and crop alerts "
-                                + "will be surfaced here.",
-                        "View alerts  →",
-                        RED,
-                        v -> showAlerts()
-                )
-        );
-    }
-
-    // ============================================================
-    // FARM
-    // ============================================================
-
-    private void showFarm() {
-
-        clearContent();
-
-        addPageHeader(
-                "My Farm",
-                "Your farm records and production information."
-        );
-
-        contentArea.addView(
-                informationCard(
-                        "Farm profile",
-                        "Tell Agriflow where your farm is and how it operates.",
-                        "Set up profile  →",
-                        GREEN,
-                        v -> showProfile()
-                )
-        );
-
-        addSectionTitle("Production");
-
-        contentArea.addView(
-                informationCard(
-                        "My crops",
-                        "Record crops, planting dates and expected harvests.",
-                        "Manage crops  →",
-                        GREEN,
-                        v -> showFarm()
-                )
-        );
-
-        contentArea.addView(
-                informationCard(
-                        "Expected harvest",
-                        "Your production forecast will eventually help "
-                                + "you plan sales and market access.",
-                        "View forecast  →",
-                        GOLD,
-                        v -> showFarm()
-                )
-        );
-
-        addSectionTitle("Farm support");
-
-        contentArea.addView(
-                informationCard(
-                        "Report a farm problem",
-                        "Capture a crop, pest or disease problem and request assistance.",
-                        "Report problem  →",
-                        RED,
-                        v -> showAlerts()
-                )
-        );
-    }
-
-    // ============================================================
-    // MARKET
-    // ============================================================
-
-    private void showMarket() {
-
-        clearContent();
-
-        addPageHeader(
-                "Market",
-                "Make better selling decisions with market intelligence."
-        );
-
-        contentArea.addView(
-                informationCard(
-                        "Market prices",
-                        "Crop prices will be shown here as our market data layer is connected.",
-                        "View prices  →",
-                        GOLD,
-                        v -> showMarket()
-                )
-        );
-
-        addSectionTitle("Market linkage");
-
-        contentArea.addView(
-                informationCard(
-                        "Find market opportunities",
-                        "Available produce can later be matched "
-                                + "with buyers and relevant markets.",
-                        "Explore markets  →",
-                        GREEN,
-                        v -> showMarket()
-                )
-        );
-
-        contentArea.addView(
-                informationCard(
-                        "My produce",
-                        "Record what you expect to harvest so it can "
-                                + "support future aggregation and market linkage.",
-                        "Add produce  →",
-                        GREEN,
-                        v -> showFarm()
-                )
-        );
-    }
-
-    // ============================================================
-    // ALERTS
-    // ============================================================
-
-    private void showAlerts() {
-
-        clearContent();
-
-        addPageHeader(
-                "Alerts",
-                "Important information that may affect your farm."
-        );
-
-        contentArea.addView(
-                emptyStateCard(
-                        "✓",
-                        "No new alerts",
-                        "When important agricultural information is available, "
-                                + "it will appear here."
-                )
-        );
-
-        addSectionTitle("Farm support");
-
-        contentArea.addView(
-                informationCard(
-                        "Report a crop problem",
-                        "Pests, disease, unusual crop symptoms or other "
-                                + "problems can be reported here.",
-                        "Report problem  →",
-                        RED,
-                        v -> showAlerts()
-                )
-        );
-
-        contentArea.addView(
-                informationCard(
-                        "Extension assistance",
-                        "Future versions will connect reported problems "
-                                + "with agricultural extension support.",
-                        "Learn more  →",
-                        GREEN,
-                        v -> showAlerts()
-                )
-        );
-    }
-
-    // ============================================================
-    // PROFILE
-    // ============================================================
-
-    private void showProfile() {
-
-        clearContent();
-
-        addPageHeader(
-                "My Profile",
-                "Your farmer identity and farm information."
-        );
-
-        LinearLayout profileCard = cardContainer();
-
-        TextView avatar = textView(
-                "F",
-                28,
-                WHITE
-        );
-
-        avatar.setGravity(Gravity.CENTER);
-        avatar.setTypeface(null, Typeface.BOLD);
-
-        avatar.setBackground(
+        card.setBackground(
                 roundedBackground(
-                        GREEN,
-                        50,
-                        GREEN
+                        color(R.color.surface),
+                        18
                 )
         );
 
-        profileCard.addView(
-                avatar,
-                new LinearLayout.LayoutParams(
-                        dp(58),
-                        dp(58)
-                )
-        );
-
-        LinearLayout profileInfo = new LinearLayout(this);
-        profileInfo.setOrientation(LinearLayout.VERTICAL);
-        profileInfo.setPadding(
-                dp(16),
-                0,
-                0,
-                0
-        );
-
-        TextView name = textView(
-                "Farmer profile not yet set up",
-                17,
-                INK
-        );
-
-        name.setTypeface(null, Typeface.BOLD);
-
-        TextView phone = textView(
-                "Add your details to personalise Agriflow.",
-                14,
-                MUTED
-        );
-
-        phone.setPadding(
-                0,
-                dp(5),
-                0,
-                0
-        );
-
-        profileInfo.addView(name);
-        profileInfo.addView(phone);
-
-        profileCard.addView(
-                profileInfo,
-                new LinearLayout.LayoutParams(
-                        0,
-                        LinearLayout.LayoutParams.WRAP_CONTENT,
-                        1
-                )
-        );
-
-        contentArea.addView(
-                profileCard,
-                marginParams(0, 0, 0, dp(16))
-        );
-
-        addSectionTitle("Profile information");
-
-        contentArea.addView(
-                informationCard(
-                        "Farmer details",
-                        "Name, phone number and basic contact information.",
-                        "Add details  →",
-                        GREEN,
-                        v -> showProfile()
-                )
-        );
-
-        contentArea.addView(
-                informationCard(
-                        "Location & farm",
-                        "Ward, area, farm size and agricultural enterprises.",
-                        "Add farm information  →",
-                        GREEN,
-                        v -> showFarm()
-                )
-        );
-    }
-
-    // ============================================================
-    // REUSABLE COMPONENTS
-    // ============================================================
-
-    private void clearContent() {
-        contentArea.removeAllViews();
-    }
-
-    private void addPageHeader(
-            String title,
-            String subtitle
-    ) {
-
-        contentArea.addView(
-                heading(title)
-        );
-
-        TextView subtitleView = bodyText(subtitle);
-
-        contentArea.addView(
-                subtitleView,
-                marginParams(0, 0, 0, dp(18))
-        );
-    }
-
-    private void addSectionTitle(String text) {
-
-        TextView title = textView(
-                text,
-                17,
-                INK
-        );
-
-        title.setTypeface(null, Typeface.BOLD);
-
-        contentArea.addView(
-                title,
+        card.setLayoutParams(
                 marginParams(
-                        0,
-                        dp(8),
-                        0,
-                        dp(10)
+                        18,
+                        8,
+                        18,
+                        8
                 )
         );
+
+        return card;
     }
 
-    private TextView heading(String text) {
-
-        TextView view = textView(
-                text,
-                28,
-                INK
-        );
-
-        view.setTypeface(null, Typeface.BOLD);
-
-        return view;
-    }
-
-    private TextView smallLabel(String text) {
-
-        TextView view = textView(
-                text,
-                11,
-                GREEN
-        );
-
-        view.setTypeface(null, Typeface.BOLD);
-        view.setLetterSpacing(0.08f);
-
-        return view;
-    }
-
-    private TextView bodyText(String text) {
-
-        return textView(
-                text,
-                15,
-                MUTED
-        );
-    }
-
-    private TextView textView(
-            String text,
-            float size,
-            int color
+    public LinearLayout coloredCard(
+            int colorResource
     ) {
 
-        TextView view = new TextView(this);
+        LinearLayout card =
+                new LinearLayout(this);
 
-        view.setText(text);
-        view.setTextSize(size);
-        view.setTextColor(color);
+        card.setOrientation(
+                LinearLayout.VERTICAL
+        );
+
+        card.setPadding(
+                dp(18),
+                dp(18),
+                dp(18),
+                dp(18)
+        );
+
+        card.setBackground(
+                roundedBackground(
+                        color(colorResource),
+                        18
+                )
+        );
+
+        return card;
+    }
+
+    public LinearLayout informationCard(
+            String title,
+            String body,
+            String buttonText
+    ) {
+
+        LinearLayout card = card();
+
+        TextView titleView =
+                text(
+                        title,
+                        17,
+                        R.color.text_primary,
+                        Typeface.BOLD
+                );
+
+        titleView.setPadding(
+                0,
+                0,
+                0,
+                dp(5)
+        );
+
+        TextView bodyView =
+                text(
+                        body,
+                        14,
+                        R.color.text_secondary,
+                        Typeface.NORMAL
+                );
+
+        bodyView.setPadding(
+                0,
+                0,
+                0,
+                dp(8)
+        );
+
+        Button button =
+                secondaryButton(buttonText);
+
+        card.addView(titleView);
+        card.addView(bodyView);
+        card.addView(button);
+
+        return card;
+    }
+
+    public Button getInformationButton(
+            LinearLayout card
+    ) {
+
+        return (Button) card.getChildAt(2);
+    }
+
+    public TextView sectionTitle(String title) {
+
+        TextView view =
+                text(
+                        title,
+                        12,
+                        R.color.text_secondary,
+                        Typeface.BOLD
+                );
+
+        view.setPadding(
+                dp(18),
+                dp(22),
+                dp(18),
+                dp(6)
+        );
 
         return view;
     }
 
-    private TextView actionButton(
-            String text,
-            int textColor,
-            int backgroundColor
+    public EditText inputField(
+            String hint,
+            String value,
+            int inputType
     ) {
 
-        TextView button = textView(
-                text,
-                14,
-                textColor
+        EditText field =
+                new EditText(this);
+
+        field.setText(value);
+        field.setHint(hint);
+        field.setTextSize(15);
+
+        field.setTextColor(
+                color(R.color.text_primary)
         );
 
-        button.setGravity(Gravity.CENTER);
-        button.setTypeface(null, Typeface.BOLD);
-
-        button.setPadding(
-                dp(16),
-                dp(12),
-                dp(16),
-                dp(12)
+        field.setHintTextColor(
+                color(R.color.text_secondary)
         );
+
+        field.setInputType(inputType);
+        field.setSingleLine(true);
+
+        field.setPadding(
+                dp(14),
+                dp(10),
+                dp(14),
+                dp(10)
+        );
+
+        field.setBackground(
+                roundedBorderBackground(
+                        color(R.color.surface),
+                        color(R.color.border),
+                        12
+                )
+        );
+
+        field.setLayoutParams(
+                marginParams(
+                        18,
+                        0,
+                        18,
+                        8
+                )
+        );
+
+        return field;
+    }
+
+    public TextView fieldLabel(String label) {
+
+        TextView view =
+                text(
+                        label,
+                        14,
+                        R.color.text_primary,
+                        Typeface.BOLD
+                );
+
+        view.setPadding(
+                dp(18),
+                dp(6),
+                dp(18),
+                dp(6)
+        );
+
+        return view;
+    }
+
+    public Button primaryButton(
+            String label
+    ) {
+
+        Button button =
+                new Button(this);
+
+        button.setText(label);
+        button.setTextSize(15);
+        button.setTextColor(
+                color(R.color.button_text)
+        );
+
+        button.setTypeface(
+                Typeface.DEFAULT,
+                Typeface.BOLD
+        );
+
+        button.setAllCaps(false);
 
         button.setBackground(
                 roundedBackground(
-                        backgroundColor,
-                        16,
-                        backgroundColor
+                        color(R.color.brand_green),
+                        14
                 )
         );
 
         return button;
     }
 
-    private LinearLayout informationCard(
-            String title,
-            String description,
-            String action,
-            int accent,
-            View.OnClickListener listener
-    ) {
-
-        LinearLayout card = new LinearLayout(this);
-
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(
-                dp(18),
-                dp(18),
-                dp(18),
-                dp(18)
-        );
-
-        card.setBackground(
-                roundedBackground(
-                        WHITE,
-                        20,
-                        BORDER
-                )
-        );
-
-        TextView titleView = textView(
-                title,
-                17,
-                INK
-        );
-
-        titleView.setTypeface(null, Typeface.BOLD);
-
-        TextView descriptionView = textView(
-                description,
-                14,
-                MUTED
-        );
-
-        descriptionView.setPadding(
-                0,
-                dp(7),
-                0,
-                dp(13)
-        );
-
-        TextView actionView = actionButton(
-                action,
-                WHITE,
-                accent
-        );
-
-        actionView.setOnClickListener(listener);
-
-        card.addView(titleView);
-        card.addView(descriptionView);
-        card.addView(actionView);
-
-        card.setLayoutParams(
-                marginParams(
-                        0,
-                        0,
-                        0,
-                        dp(12)
-                )
-        );
-
-        return card;
-    }
-
-    private LinearLayout smallAction(
-            String icon,
-            String label,
-            int accent,
-            View.OnClickListener listener
-    ) {
-
-        LinearLayout card = new LinearLayout(this);
-
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setGravity(Gravity.CENTER);
-        card.setPadding(
-                dp(8),
-                dp(13),
-                dp(8),
-                dp(13)
-        );
-
-        card.setBackground(
-                roundedBackground(
-                        WHITE,
-                        18,
-                        BORDER
-                )
-        );
-
-        card.setOnClickListener(listener);
-
-        TextView iconView = textView(
-                icon,
-                22,
-                accent
-        );
-
-        iconView.setGravity(Gravity.CENTER);
-
-        TextView labelView = textView(
-                label,
-                12,
-                TEXT
-        );
-
-        labelView.setGravity(Gravity.CENTER);
-        labelView.setTypeface(null, Typeface.BOLD);
-
-        labelView.setPadding(
-                0,
-                dp(5),
-                0,
-                0
-        );
-
-        card.addView(iconView);
-        card.addView(labelView);
-
-        card.setLayoutParams(
-                new LinearLayout.LayoutParams(
-                        0,
-                        dp(88),
-                        1
-                )
-        );
-
-        return card;
-    }
-
-    private LinearLayout horizontalContainer() {
-
-        LinearLayout layout = new LinearLayout(this);
-
-        layout.setOrientation(
-                LinearLayout.HORIZONTAL
-        );
-
-        layout.setGravity(Gravity.CENTER);
-
-        layout.setLayoutParams(
-                new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
-                )
-        );
-
-        return layout;
-    }
-
-    private LinearLayout cardContainer() {
-
-        LinearLayout card = new LinearLayout(this);
-
-        card.setOrientation(
-                LinearLayout.HORIZONTAL
-        );
-
-        card.setGravity(
-                Gravity.CENTER_VERTICAL
-        );
-
-        card.setPadding(
-                dp(18),
-                dp(18),
-                dp(18),
-                dp(18)
-        );
-
-        card.setBackground(
-                roundedBackground(
-                        WHITE,
-                        20,
-                        BORDER
-                )
-        );
-
-        return card;
-    }
-
-    private LinearLayout metricBlock(
-            String value,
+    public Button secondaryButton(
             String label
     ) {
 
-        LinearLayout metric = new LinearLayout(this);
+        Button button =
+                new Button(this);
 
-        metric.setOrientation(
+        button.setText(label);
+        button.setTextSize(14);
+        button.setTextColor(
+                color(R.color.brand_green)
+        );
+
+        button.setTypeface(
+                Typeface.DEFAULT,
+                Typeface.BOLD
+        );
+
+        button.setAllCaps(false);
+
+        button.setBackground(
+                roundedBorderBackground(
+                        color(R.color.brand_green_light),
+                        color(R.color.border),
+                        12
+                )
+        );
+
+        return button;
+    }
+
+    public Button actionButton(
+            String label
+    ) {
+
+        Button button =
+                new Button(this);
+
+        button.setText(label);
+        button.setTextSize(12);
+        button.setTextColor(
+                color(R.color.brand_green_dark)
+        );
+
+        button.setTypeface(
+                Typeface.DEFAULT,
+                Typeface.BOLD
+        );
+
+        button.setAllCaps(false);
+
+        button.setBackground(
+                roundedBorderBackground(
+                        color(R.color.surface),
+                        color(R.color.border),
+                        12
+                )
+        );
+
+        return button;
+    }
+
+    public LinearLayout detailRow(
+            String label,
+            String value
+    ) {
+
+        LinearLayout row =
+                new LinearLayout(this);
+
+        row.setOrientation(
                 LinearLayout.VERTICAL
         );
 
-        metric.setGravity(
-                Gravity.CENTER
-        );
-
-        metric.setPadding(
-                dp(4),
-                dp(4),
-                dp(4),
-                dp(4)
-        );
-
-        TextView valueView = textView(
-                value,
-                24,
-                GREEN
-        );
-
-        valueView.setGravity(Gravity.CENTER);
-        valueView.setTypeface(null, Typeface.BOLD);
-
-        TextView labelView = textView(
-                label,
-                12,
-                MUTED
-        );
-
-        labelView.setGravity(Gravity.CENTER);
+        TextView labelView =
+                text(
+                        label.toUpperCase(),
+                        11,
+                        R.color.text_secondary,
+                        Typeface.BOLD
+                );
 
         labelView.setPadding(
                 0,
-                dp(4),
                 0,
-                0
+                0,
+                dp(3)
         );
 
-        metric.addView(valueView);
-        metric.addView(labelView);
+        TextView valueView =
+                text(
+                        value,
+                        16,
+                        R.color.text_primary,
+                        Typeface.BOLD
+                );
 
-        metric.setLayoutParams(
+        valueView.setPadding(
+                0,
+                0,
+                0,
+                dp(10)
+        );
+
+        row.addView(labelView);
+        row.addView(valueView);
+
+        return row;
+    }
+
+    public LinearLayout statRow(
+            String label,
+            String value
+    ) {
+
+        LinearLayout row =
+                new LinearLayout(this);
+
+        row.setOrientation(
+                LinearLayout.HORIZONTAL
+        );
+
+        row.setPadding(
+                0,
+                dp(5),
+                0,
+                dp(5)
+        );
+
+        TextView left =
+                text(
+                        label,
+                        13,
+                        R.color.text_secondary,
+                        Typeface.NORMAL
+                );
+
+        TextView right =
+                text(
+                        value,
+                        14,
+                        R.color.text_primary,
+                        Typeface.BOLD
+                );
+
+        row.addView(
+                left,
                 new LinearLayout.LayoutParams(
                         0,
-                        dp(75),
+                        dp(32),
                         1
                 )
         );
 
-        return metric;
-    }
-
-    private View metricDivider() {
-
-        View divider = new View(this);
-
-        divider.setBackgroundColor(BORDER);
-
-        divider.setLayoutParams(
+        row.addView(
+                right,
                 new LinearLayout.LayoutParams(
-                        dp(1),
-                        dp(44)
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        dp(32)
                 )
         );
 
-        return divider;
+        return row;
     }
 
-    private TextView emptyStateCard(
-            String icon,
-            String title,
-            String description
-    ) {
-
-        TextView card = textView(
-                icon + "\n\n"
-                        + title
-                        + "\n"
-                        + description,
-                15,
-                TEXT
-        );
-
-        card.setGravity(
-                Gravity.CENTER
-        );
-
-        card.setPadding(
-                dp(20),
-                dp(28),
-                dp(20),
-                dp(28)
-        );
-
-        card.setBackground(
-                roundedBackground(
-                        GREEN_LIGHT,
-                        20,
-                        GREEN_LIGHT
-                )
-        );
-
-        card.setLayoutParams(
-                marginParams(
-                        0,
-                        0,
-                        0,
-                        dp(16)
-                )
-        );
-
-        return card;
-    }
-
-    // ============================================================
-    // HELPERS
-    // ============================================================
-
-    private GradientDrawable roundedBackground(
-            int fill,
-            int radiusDp,
-            int strokeColor
-    ) {
-
-        GradientDrawable drawable =
-                new GradientDrawable();
-
-        drawable.setColor(fill);
-        drawable.setCornerRadius(
-                dp(radiusDp)
-        );
-
-        if (strokeColor != fill) {
-            drawable.setStroke(
-                    dp(1),
-                    strokeColor
-            );
-        }
-
-        return drawable;
-    }
-
-    private LinearLayout.LayoutParams marginParams(
+    public LinearLayout.LayoutParams marginParams(
             int left,
             int top,
             int right,
@@ -1163,28 +878,56 @@ public class MainActivity extends Activity {
 
         LinearLayout.LayoutParams params =
                 new LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT,
-                        LinearLayout.LayoutParams.WRAP_CONTENT
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
                 );
 
         params.setMargins(
-                left,
-                top,
-                right,
-                bottom
+                dp(left),
+                dp(top),
+                dp(right),
+                dp(bottom)
         );
 
         return params;
     }
 
-    private int dp(int value) {
+    // ============================================================
+    // DRAWABLE HELPERS
+    // ============================================================
 
-        return (int) (
-                value
-                        * getResources()
-                        .getDisplayMetrics()
-                        .density
-                        + 0.5f
+    public android.graphics.drawable.GradientDrawable
+    roundedBackground(
+            int backgroundColor,
+            int radius
+    ) {
+
+        android.graphics.drawable.GradientDrawable drawable =
+                new android.graphics.drawable.GradientDrawable();
+
+        drawable.setColor(backgroundColor);
+        drawable.setCornerRadius(dp(radius));
+
+        return drawable;
+    }
+
+    public android.graphics.drawable.GradientDrawable
+    roundedBorderBackground(
+            int backgroundColor,
+            int borderColor,
+            int radius
+    ) {
+
+        android.graphics.drawable.GradientDrawable drawable =
+                new android.graphics.drawable.GradientDrawable();
+
+        drawable.setColor(backgroundColor);
+        drawable.setCornerRadius(dp(radius));
+        drawable.setStroke(
+                dp(1),
+                borderColor
         );
+
+        return drawable;
     }
 }
