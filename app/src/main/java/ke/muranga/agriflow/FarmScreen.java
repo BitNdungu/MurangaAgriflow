@@ -133,10 +133,18 @@ public class FarmScreen extends ScrollView {
         LinearLayout cropsCard =
                 activity.informationCard(
                         "Crops & production",
-                        "Manage crops, planting dates, expected "
-                                + "harvests and production quantities here.",
-                        "Coming next"
+                        "Record your crops, planting dates, "
+                                + "expected harvests and production quantities.",
+                        "Manage crops"
                 );
+
+        activity.getInformationButton(
+                cropsCard
+        ).setOnClickListener(
+                v -> activity.showScreen(
+                        MainActivity.CROPS
+                )
+        );
 
         content.addView(cropsCard);
 

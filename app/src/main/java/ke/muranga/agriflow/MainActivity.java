@@ -25,6 +25,7 @@ public class MainActivity extends AppCompatActivity {
     public static final String MARKET = "MARKET";
     public static final String ALERTS = "ALERTS";
     public static final String PROFILE = "PROFILE";
+    public static final String CROPS = "CROPS";
 
     private static final String PREFS_NAME = "agriflow_profile";
     private static final String APPEARANCE_KEY = "appearance";
@@ -259,6 +260,10 @@ public class MainActivity extends AppCompatActivity {
 
             case FARM:
                 screenView = new FarmScreen(this);
+                break;
+
+            case CROPS:
+                screenView = new CropScreen(this);
                 break;
 
             case MARKET:
