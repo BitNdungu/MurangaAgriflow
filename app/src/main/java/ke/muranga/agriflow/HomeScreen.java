@@ -8,6 +8,10 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.content.res.ColorStateList;
+import android.widget.ImageView;
+
+import androidx.appcompat.widget.SwitchCompat;
 
 public class HomeScreen extends ScrollView {
 
@@ -48,39 +52,52 @@ public class HomeScreen extends ScrollView {
                         .getString("full_name", "")
                         .trim();
 
-        LinearLayout header =
-                new LinearLayout(activity);
-
-        header.setOrientation(
-                LinearLayout.VERTICAL
-        );
+        LinearLayout header = new LinearLayout(activity);
+        header.setOrientation(LinearLayout.VERTICAL);
 
         header.setPadding(
                 activity.dp(18),
-                activity.dp(20),
+                activity.dp(16),
                 activity.dp(18),
                 activity.dp(8)
         );
 
-        TextView county =
-                activity.text(
-                        "MURANG'A COUNTY",
-                        11,
-                        R.color.brand_green,
-                        Typeface.BOLD
-                );
+        LinearLayout headerRow = new LinearLayout(activity);
+        headerRow.setOrientation(LinearLayout.HORIZONTAL);
+        headerRow.setGravity(Gravity.CENTER_VERTICAL);
 
-        TextView title =
-                activity.text(
-                        "AGRIFLOW",
-                        27,
-                        R.color.text_primary,
-                        Typeface.BOLD
-                );
+        LinearLayout branding = new LinearLayout(activity);
+        branding.setOrientation(LinearLayout.VERTICAL);
 
-        header.addView(county);
-        header.addView(title);
+        TextView county = activity.text(
+                "MURANG'A COUNTY",
+                11,
+                R.color.brand_green,
+                Typeface.BOLD
+        );
 
+        TextView title = activity.text(
+                "AGRIFLOW",
+                27,
+                R.color.text_primary,
+                Typeface.BOLD
+        );
+
+        branding.addView(county);
+        branding.addView(title);
+
+        headerRow.addView(
+                branding,
+                new LinearLayout.LayoutParams(
+                        0,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        1
+                )
+        );
+
+        headerRow.addView(createAppearanceControl());
+
+        header.addView(headerRow);
         content.addView(header);
 
         TextView welcome =
@@ -385,5 +402,126 @@ public class HomeScreen extends ScrollView {
                 );
 
         content.addView(bottomSpace);
+    }
+
+    private LinearLayout createAppearanceControl() {
+
+        LinearLayout control = new LinearLayout(activity);
+
+        control.setOrientation(LinearLayout.HORIZONTAL);
+        control.setGravity(Gravity.CENTER_VERTICAL);
+
+        ImageView sun = new ImageView(activity);
+        sun.setImageResource(R.drawable.ic_sun);
+        sun.setColorFilter(
+                activity.color(R.color.brand_green)
+        );
+
+        sun.setContentDescription("Light appearance");
+
+        control.addView(
+                sun,
+                new LinearLayout.LayoutParams(
+                        activity.dp(18),
+                        activity.dp(18)
+                )
+        );
+
+        SwitchCompat darkSwitch = new SwitchCompat(activity);
+
+        darkSwitch.setShowText(false);
+
+        darkSwitch.setContentDescription(
+                "Toggle light and dark appearance"
+        );
+
+        darkSwitch.setChecked(
+                activity.isDarkThemeActive()
+        );
+
+        int[][] states = new int[][] {
+                new int[] { android.R.attr.state_checked },
+                new int[] {}
+        };
+
+        int[] thumbColors = new int[] {
+                activity.color(R.color.brand_green),
+                activity.color(R.color.text_secondary)
+        };
+
+        int[] trackColors = new int[] {
+                activity.color(R.color.brand_green_light),
+                activity.color(R.color.border)
+        };
+
+        darkSwitch.setThumbTintList(
+                new ColorStateList(states, thumbColors)
+        );
+
+        darkSwitch.setTrackTintList(
+                new ColorStateList(states, trackColors)
+        );
+
+        LinearLayout.LayoutParams switchParams =
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                );
+
+        switchParams.setMargins(
+                activity.dp(3),
+                0,
+                activity.dp(3),
+                0
+        );
+
+        control.addView(darkSwitch, switchParams);
+
+        ImageView moon = new ImageView(activity);
+        moon.setImageResource(R.drawable.ic_moon);
+        moon.setColorFilter(
+                activity.color(R.color.brand_green)
+        );
+
+        moon.setContentDescription("Dark appearance");
+
+        control.addView(
+                moon,
+                new LinearLayout.LayoutParams(
+                        activity.dp(18),
+                        activity.dp(18)
+                )
+        );
+
+        darkSwitch.setOnCheckedChangeListener(
+                (buttonView, isChecked) ->
+                        activity.setAppearanceFromHome(isChecked)
+        );
+
+        sun.setOnClickListener(v -> {
+
+            if (darkSwitch.isChecked()) {
+                darkSwitch.setChecked(false);
+            } else {
+                activity.setAppearanceFromHome(false);
+            }
+        });
+
+        moon.setOnClickListener(v -> {
+
+            if (!darkSwitch.isChecked()) {
+                darkSwitch.setChecked(true);
+            } else {
+                activity.setAppearanceFromHome(true);
+            }
+        });
+
+        // Long-press opens the complete three-option theme selector.
+        control.setOnLongClickListener(v -> {
+            activity.showAppearanceDialog();
+            return true;
+        });
+
+        return control;
     }
 }

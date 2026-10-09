@@ -392,91 +392,6 @@ public class ProfileScreen extends ScrollView {
                 )
         );
 
-        // --------------------------------------------------------
-        // APPEARANCE
-        // --------------------------------------------------------
-
-        content.addView(
-                activity.sectionTitle(
-                        "APP APPEARANCE"
-                )
-        );
-
-        LinearLayout appearanceCard =
-                activity.card();
-
-        TextView appearanceTitle =
-                activity.text(
-                        "Appearance",
-                        17,
-                        R.color.text_primary,
-                        Typeface.BOLD
-                );
-
-        appearanceTitle.setPadding(
-                0,
-                0,
-                0,
-                activity.dp(4)
-        );
-
-        TextView appearanceDescription =
-                activity.text(
-                        "Choose how MURANG'A AGRIFLOW looks on your phone.",
-                        14,
-                        R.color.text_secondary,
-                        Typeface.NORMAL
-                );
-
-        appearanceDescription.setPadding(
-                0,
-                0,
-                0,
-                activity.dp(5)
-        );
-
-        TextView current =
-                activity.text(
-                        "Current: "
-                                + activity.getAppearanceLabel(),
-                        13,
-                        R.color.brand_green,
-                        Typeface.BOLD
-                );
-
-        current.setPadding(
-                0,
-                0,
-                0,
-                activity.dp(10)
-        );
-
-        Button changeAppearance =
-                activity.secondaryButton(
-                        "Change appearance"
-                );
-
-        changeAppearance.setOnClickListener(
-                v -> activity.showAppearanceDialog()
-        );
-
-        appearanceCard.addView(
-                appearanceTitle
-        );
-
-        appearanceCard.addView(
-                appearanceDescription
-        );
-
-        appearanceCard.addView(
-                current
-        );
-
-        appearanceCard.addView(
-                changeAppearance
-        );
-
-        content.addView(appearanceCard);
 
         // --------------------------------------------------------
         // DEVELOPMENT NOTE
@@ -507,7 +422,8 @@ public class ProfileScreen extends ScrollView {
                         "Your profile is currently stored locally on "
                                 + "this phone. Later we can securely "
                                 + "synchronize farmer records, production "
-                                + "and market information with a backend.",
+                                + "and market information with a backend."
+                                + "Icio ni ciugo cia NDUNGU",
                         13,
                         R.color.text_primary,
                         Typeface.NORMAL

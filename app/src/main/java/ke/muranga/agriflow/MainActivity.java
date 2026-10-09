@@ -17,6 +17,12 @@ import android.widget.TextView;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.app.AppCompatDelegate;
+import android.content.res.Configuration;
+import android.content.res.ColorStateList;
+import android.widget.ImageView;
+import android.widget.Toast;
+
+import androidx.appcompat.widget.SwitchCompat;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -34,6 +40,9 @@ public class MainActivity extends AppCompatActivity {
 
     private FrameLayout contentFrame;
     private LinearLayout bottomNavigation;
+
+    private String currentScreen = HOME;
+    private long lastBackPressedAt = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -279,11 +288,19 @@ public class MainActivity extends AppCompatActivity {
                 break;
 
             default:
+                screen = HOME;
                 screenView = new HomeScreen(this);
                 break;
         }
 
+        // Stop any previous animation before switching screens.
+        contentFrame.animate().cancel();
+
         contentFrame.removeAllViews();
+
+        // Start just to the right, then slide and fade into place.
+        screenView.setAlpha(0f);
+        screenView.setTranslationX(dp(12));
 
         contentFrame.addView(
                 screenView,
@@ -293,12 +310,34 @@ public class MainActivity extends AppCompatActivity {
                 )
         );
 
+        screenView.animate()
+                .alpha(1f)
+                .translationX(0f)
+                .setDuration(180)
+                .start();
+
+        currentScreen = screen;
         updateBottomNavigation(screen);
     }
+    public boolean isDarkThemeActive() {
 
-    // ============================================================
-    // BOTTOM NAVIGATION
-    // ============================================================
+        int nightMode = getResources()
+                .getConfiguration()
+                .uiMode & Configuration.UI_MODE_NIGHT_MASK;
+
+        return nightMode == Configuration.UI_MODE_NIGHT_YES;
+    }
+
+    public void setAppearanceFromHome(boolean dark) {
+
+        String appearance = dark ? "dark" : "light";
+
+        preferences.edit()
+                .putString(APPEARANCE_KEY, appearance)
+                .apply();
+
+        applyAppearance(appearance);
+    }
 
     private LinearLayout createBottomNavigation() {
 
@@ -338,92 +377,157 @@ public class MainActivity extends AppCompatActivity {
         return nav;
     }
 
-    private TextView navButton(
+    private LinearLayout navButton(
             String label,
             String destination
     ) {
 
-        TextView button = new TextView(this);
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setGravity(Gravity.CENTER);
 
-        button.setText(label);
-        button.setGravity(Gravity.CENTER);
-        button.setTextSize(11);
-        button.setTypeface(
+        item.setPadding(
+                dp(2),
+                dp(5),
+                dp(2),
+                dp(4)
+        );
+
+        item.setTag(destination);
+        item.setClickable(true);
+        item.setFocusable(true);
+
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(navIcon(destination));
+        icon.setScaleType(ImageView.ScaleType.FIT_CENTER);
+
+        LinearLayout.LayoutParams iconParams =
+                new LinearLayout.LayoutParams(
+                        dp(22),
+                        dp(22)
+                );
+
+        item.addView(icon, iconParams);
+
+        TextView text = new TextView(this);
+        text.setText(label);
+        text.setTextSize(10);
+        text.setGravity(Gravity.CENTER);
+        text.setTypeface(
                 Typeface.DEFAULT,
                 Typeface.BOLD
         );
 
-        button.setTextColor(
-                color(R.color.text_primary)
-        );
+        LinearLayout.LayoutParams textParams =
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                );
 
-        button.setPadding(
-                dp(4),
-                dp(8),
-                dp(4),
-                dp(8)
-        );
+        textParams.topMargin = dp(2);
 
-        button.setOnClickListener(
+        item.addView(text, textParams);
+
+        item.setOnClickListener(
                 v -> showScreen(destination)
         );
 
-        return button;
+        return item;
     }
 
-    private void updateBottomNavigation(
-            String activeScreen
-    ) {
+    private int navIcon(String destination) {
+
+        switch (destination) {
+
+            case FARM:
+                return R.drawable.ic_sprout;
+
+            case MARKET:
+                return R.drawable.ic_store;
+
+            case ALERTS:
+                return R.drawable.ic_bell;
+
+            case PROFILE:
+                return R.drawable.ic_person;
+
+            default:
+                return R.drawable.ic_home;
+        }
+    }
+
+    private void updateBottomNavigation(String activeScreen) {
 
         for (int i = 0;
              i < bottomNavigation.getChildCount();
              i++) {
 
-            View view =
-                    bottomNavigation.getChildAt(i);
+            View view = bottomNavigation.getChildAt(i);
 
-            if (!(view instanceof TextView)) {
+            if (!(view instanceof LinearLayout)) {
                 continue;
             }
 
-            TextView item =
-                    (TextView) view;
+            LinearLayout item = (LinearLayout) view;
 
-            String label =
-                    item.getText().toString();
+            String destination = (String) item.getTag();
 
-            if (label.equals(activeScreen)) {
+            ImageView icon =
+                    (ImageView) item.getChildAt(0);
 
-                item.setTextColor(
-                        color(R.color.brand_green)
-                );
+            TextView label =
+                    (TextView) item.getChildAt(1);
 
-                item.setBackground(
-                        roundedBackground(
-                                color(R.color.brand_green_light),
-                                14
-                        )
-                );
+            boolean selected =
+                    activeScreen.equals(destination);
 
-            } else {
+            int foreground = color(
+                    selected
+                            ? R.color.brand_green
+                            : R.color.text_secondary
+            );
 
-                item.setTextColor(
-                        color(R.color.text_primary)
-                );
+            icon.setColorFilter(foreground);
+            label.setTextColor(foreground);
 
-                item.setBackground(
-                        roundedBackground(
-                                color(R.color.surface),
-                                14
-                        )
-                );
-            }
+            item.setBackground(
+                    roundedBackground(
+                            color(
+                                    selected
+                                            ? R.color.brand_green_light
+                                            : R.color.surface
+                            ),
+                            12
+                    )
+            );
         }
     }
 
-    // ============================================================
-    // SHARED STORAGE
-    // ============================================================
+    @Override
+    public void onBackPressed() {
+
+        if (!HOME.equals(currentScreen)) {
+
+            showScreen(HOME);
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+
+        if (now - lastBackPressedAt < 2000) {
+
+            finish();
+            return;
+        }
+
+        lastBackPressedAt = now;
+
+        Toast.makeText(
+                this,
+                "Press back again to exit",
+                Toast.LENGTH_SHORT
+        ).show();
+    }
 
     public SharedPreferences getPreferencesStore() {
         return preferences;
