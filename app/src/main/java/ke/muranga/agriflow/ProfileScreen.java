@@ -11,6 +11,8 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.ArrayAdapter;
+import android.widget.Spinner;
 
 public class ProfileScreen extends ScrollView {
 
@@ -193,18 +195,50 @@ public class ProfileScreen extends ScrollView {
                 )
         );
 
-        EditText subcountyField =
-                activity.inputField(
-                        "Enter your sub-county",
-                        preferences.getString(
-                                "subcounty",
-                                ""
-                        ),
-                        InputType.TYPE_CLASS_TEXT
-                                | InputType.TYPE_TEXT_FLAG_CAP_WORDS
+        Spinner subcountySpinner = new Spinner(
+                activity,
+                Spinner.MODE_DROPDOWN
+        );
+
+        ArrayAdapter<CharSequence> subcountyAdapter =
+                ArrayAdapter.createFromResource(
+                        activity,
+                        R.array.muranga_subcounties,
+                        android.R.layout.simple_spinner_item
                 );
 
-        content.addView(subcountyField);
+        subcountyAdapter.setDropDownViewResource(
+                android.R.layout.simple_spinner_dropdown_item
+        );
+
+        subcountySpinner.setAdapter(subcountyAdapter);
+
+
+
+        subcountySpinner.setPadding(
+                activity.dp(12),
+                activity.dp(8),
+                activity.dp(12),
+                activity.dp(8)
+        );
+
+        LinearLayout.LayoutParams spinnerParams =
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        activity.dp(52)
+                );
+
+        spinnerParams.setMargins(
+                activity.dp(18),
+                0,
+                activity.dp(18),
+                activity.dp(8)
+        );
+
+        content.addView(
+                subcountySpinner,
+                spinnerParams
+        );
 
         content.addView(
                 activity.fieldLabel(
@@ -297,11 +331,14 @@ public class ProfileScreen extends ScrollView {
                                     .toString()
                                     .trim();
 
-                    String subcounty =
-                            subcountyField
-                                    .getText()
-                                    .toString()
-                                    .trim();
+                    String subcounty = "";
+
+                    if (subcountySpinner.getSelectedItemPosition() > 0) {
+                        subcounty = subcountySpinner
+                                .getSelectedItem()
+                                .toString()
+                                .trim();
+                    }
 
                     String ward =
                             wardField

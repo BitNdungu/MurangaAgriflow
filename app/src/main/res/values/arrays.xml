@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string-array name="muranga_subcounties">
+        <item>Choose a sub-county</item>
+        <item>Gatanga</item>
+        <item>Ithanga</item>
+        <item>Kahuro</item>
+        <item>Kandara</item>
+        <item>Kangema</item>
+        <item>Kigumo</item>
+        <item>Mathioya</item>
+        <item>Kiharu</item>
+        <item>Maragua</item>
+    </string-array>
+
+</resources>
