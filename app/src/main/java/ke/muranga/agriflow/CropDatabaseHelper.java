@@ -139,7 +139,53 @@ public class CropDatabaseHelper extends SQLiteOpenHelper {
                 values
         );
     }
+    public int updateCrop(Crop crop) {
 
+        SQLiteDatabase db =
+                getWritableDatabase();
+
+        ContentValues values =
+                new ContentValues();
+
+        values.put(
+                COLUMN_NAME,
+                crop.getName()
+        );
+
+        values.put(
+                COLUMN_ACREAGE,
+                crop.getAcreage()
+        );
+
+        values.put(
+                COLUMN_PLANTING_DATE,
+                crop.getPlantingDate()
+        );
+
+        values.put(
+                COLUMN_EXPECTED_HARVEST,
+                crop.getExpectedHarvestDate()
+        );
+
+        values.put(
+                COLUMN_EXPECTED_QUANTITY,
+                crop.getExpectedQuantity()
+        );
+
+        values.put(
+                COLUMN_QUANTITY_UNIT,
+                crop.getQuantityUnit()
+        );
+
+        return db.update(
+                TABLE_CROPS,
+                values,
+                COLUMN_ID + " = ?",
+                new String[]{
+                        String.valueOf(crop.getId())
+                }
+        );
+    }
     public List<Crop> getAllCrops() {
 
         List<Crop> crops =

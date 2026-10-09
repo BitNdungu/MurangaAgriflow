@@ -290,6 +290,19 @@ public class CropScreen extends ScrollView {
             );
         }
 
+        Button editButton =
+                activity.secondaryButton(
+                        "Edit crop"
+                );
+
+        editButton.setOnClickListener(
+                v -> showEditCropDialog(crop)
+        );
+
+        cropCard.addView(
+                editButton
+        );
+
         Button deleteButton =
                 activity.secondaryButton(
                         "Remove crop"
@@ -303,10 +316,22 @@ public class CropScreen extends ScrollView {
                 deleteButton
         );
 
+// Add the completed crop card to the visible screen.
         content.addView(cropCard);
     }
 
+
     private void showAddCropDialog() {
+        showCropDialog(null);
+    }
+
+    private void showEditCropDialog(Crop crop) {
+        showCropDialog(crop);
+    }
+
+    private void showCropDialog(Crop existingCrop) {
+
+        boolean editing = existingCrop != null;
 
         LinearLayout form =
                 new LinearLayout(activity);
@@ -330,7 +355,9 @@ public class CropScreen extends ScrollView {
         EditText nameField =
                 activity.inputField(
                         "e.g. avocado",
-                        "",
+                        editing
+                                ? existingCrop.getName()
+                                : "",
                         InputType.TYPE_CLASS_TEXT |
                                 InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
                 );
@@ -343,7 +370,11 @@ public class CropScreen extends ScrollView {
         EditText areaField =
                 activity.inputField(
                         "e.g. 2.5",
-                        "",
+                        editing
+                                ? formatNumber(
+                                existingCrop.getAcreage()
+                        )
+                                : "",
                         InputType.TYPE_CLASS_NUMBER |
                                 InputType.TYPE_NUMBER_FLAG_DECIMAL
                 );
@@ -356,7 +387,9 @@ public class CropScreen extends ScrollView {
         EditText plantingField =
                 activity.inputField(
                         "Select planting date",
-                        "",
+                        editing
+                                ? existingCrop.getPlantingDate()
+                                : "",
                         InputType.TYPE_CLASS_TEXT
                 );
 
@@ -370,7 +403,9 @@ public class CropScreen extends ScrollView {
         EditText harvestField =
                 activity.inputField(
                         "Select expected harvest date",
-                        "",
+                        editing
+                                ? existingCrop.getExpectedHarvestDate()
+                                : "",
                         InputType.TYPE_CLASS_TEXT
                 );
 
@@ -384,7 +419,12 @@ public class CropScreen extends ScrollView {
         EditText quantityField =
                 activity.inputField(
                         "e.g. 3000",
-                        "",
+                        editing &&
+                                existingCrop.getExpectedQuantity() > 0
+                                ? formatNumber(
+                                existingCrop.getExpectedQuantity()
+                        )
+                                : "",
                         InputType.TYPE_CLASS_NUMBER |
                                 InputType.TYPE_NUMBER_FLAG_DECIMAL
                 );
@@ -397,7 +437,9 @@ public class CropScreen extends ScrollView {
         EditText unitField =
                 activity.inputField(
                         "e.g. kg, bags, crates",
-                        "",
+                        editing
+                                ? existingCrop.getQuantityUnit()
+                                : "",
                         InputType.TYPE_CLASS_TEXT
                 );
 
@@ -438,16 +480,26 @@ public class CropScreen extends ScrollView {
                 )
         );
 
+        String dialogTitle =
+                editing
+                        ? "Edit crop"
+                        : "Add crop";
+
+        String saveLabel =
+                editing
+                        ? "Update crop"
+                        : "Save crop";
+
         android.app.AlertDialog dialog =
                 new android.app.AlertDialog.Builder(activity)
-                        .setTitle("Add crop")
+                        .setTitle(dialogTitle)
                         .setView(scrollForm)
                         .setNegativeButton(
                                 "Cancel",
                                 null
                         )
                         .setPositiveButton(
-                                "Save crop",
+                                saveLabel,
                                 null
                         )
                         .create();
@@ -549,6 +601,15 @@ public class CropScreen extends ScrollView {
 
                                         return;
                                     }
+
+                                    if (expectedQuantity < 0) {
+
+                                        quantityField.setError(
+                                                "Production cannot be negative"
+                                        );
+
+                                        return;
+                                    }
                                 }
 
                                 String unit =
@@ -559,6 +620,9 @@ public class CropScreen extends ScrollView {
 
                                 Crop crop =
                                         new Crop(
+                                                editing
+                                                        ? existingCrop.getId()
+                                                        : 0,
                                                 name,
                                                 acreage,
                                                 plantingField
@@ -573,16 +637,31 @@ public class CropScreen extends ScrollView {
                                                 unit
                                         );
 
-                                long result =
-                                        database.insertCrop(
-                                                crop
-                                        );
+                                long result;
 
-                                if (result == -1) {
+                                if (editing) {
+
+                                    result =
+                                            database.updateCrop(
+                                                    crop
+                                            );
+
+                                } else {
+
+                                    result =
+                                            database.insertCrop(
+                                                    crop
+                                            );
+                                }
+
+                                if (result == -1 ||
+                                        (!editing && result <= 0)) {
 
                                     Toast.makeText(
                                             activity,
-                                            "Could not save crop",
+                                            editing
+                                                    ? "Could not update crop"
+                                                    : "Could not save crop",
                                             Toast.LENGTH_SHORT
                                     ).show();
 
@@ -593,7 +672,9 @@ public class CropScreen extends ScrollView {
 
                                 Toast.makeText(
                                         activity,
-                                        "Crop saved successfully",
+                                        editing
+                                                ? "Crop updated successfully"
+                                                : "Crop saved successfully",
                                         Toast.LENGTH_SHORT
                                 ).show();
 
