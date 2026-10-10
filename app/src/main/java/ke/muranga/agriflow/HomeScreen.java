@@ -208,9 +208,10 @@ public class HomeScreen extends ScrollView {
 
         reportIssue.setOnClickListener(
                 v -> activity.showScreen(
-                        MainActivity.ALERTS
+                        MainActivity.PROBLEM_REPORT
                 )
         );
+        ;
 
         checkMarket.setOnClickListener(
                 v -> activity.showScreen(

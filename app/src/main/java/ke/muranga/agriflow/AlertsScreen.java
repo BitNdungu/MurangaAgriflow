@@ -119,6 +119,14 @@ public class AlertsScreen extends ScrollView {
                         "Report problem"
                 );
 
+        activity.getInformationButton(
+                report
+        ).setOnClickListener(
+                v -> activity.showScreen(
+                        MainActivity.PROBLEM_REPORT
+                )
+        );
+
         content.addView(report);
 
         LinearLayout extension =

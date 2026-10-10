@@ -21,6 +21,7 @@ import android.content.res.Configuration;
 import android.content.res.ColorStateList;
 import android.widget.ImageView;
 import android.widget.Toast;
+import android.content.Intent;
 
 import androidx.appcompat.widget.SwitchCompat;
 
@@ -32,6 +33,7 @@ public class MainActivity extends AppCompatActivity {
     public static final String ALERTS = "ALERTS";
     public static final String PROFILE = "PROFILE";
     public static final String CROPS = "CROPS";
+    public static final String PROBLEM_REPORT = "PROBLEM_REPORT";
 
     private static final String PREFS_NAME = "agriflow_profile";
     private static final String APPEARANCE_KEY = "appearance";
@@ -43,6 +45,8 @@ public class MainActivity extends AppCompatActivity {
 
     private String currentScreen = HOME;
     private long lastBackPressedAt = 0;
+
+    private View currentScreenView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,6 +73,29 @@ public class MainActivity extends AppCompatActivity {
     // ============================================================
     // APPEARANCE
     // ============================================================
+
+    @Override
+    protected void onActivityResult(
+            int requestCode,
+            int resultCode,
+            Intent data
+    ) {
+        super.onActivityResult(
+                requestCode,
+                resultCode,
+                data
+        );
+
+        if (currentScreenView instanceof ProblemReportScreen) {
+
+            ((ProblemReportScreen) currentScreenView)
+                    .handleActivityResult(
+                            requestCode,
+                            resultCode,
+                            data
+                    );
+        }
+    }
 
     private void applyStoredAppearance() {
 
@@ -287,18 +314,23 @@ public class MainActivity extends AppCompatActivity {
                 screenView = new ProfileScreen(this);
                 break;
 
+            case PROBLEM_REPORT:
+                screenView = new ProblemReportScreen(this);
+                break;
+
             default:
                 screen = HOME;
                 screenView = new HomeScreen(this);
                 break;
         }
 
-        // Stop any previous animation before switching screens.
-        contentFrame.animate().cancel();
+        // Remember which screen is currently displayed.
+        currentScreenView = screenView;
 
+        // Prepare the screen transition.
+        contentFrame.animate().cancel();
         contentFrame.removeAllViews();
 
-        // Start just to the right, then slide and fade into place.
         screenView.setAlpha(0f);
         screenView.setTranslationX(dp(12));
 
@@ -319,6 +351,7 @@ public class MainActivity extends AppCompatActivity {
         currentScreen = screen;
         updateBottomNavigation(screen);
     }
+
     public boolean isDarkThemeActive() {
 
         int nightMode = getResources()

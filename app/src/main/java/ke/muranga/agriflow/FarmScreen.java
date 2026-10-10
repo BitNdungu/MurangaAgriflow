@@ -160,7 +160,7 @@ public class FarmScreen extends ScrollView {
                 problemCard
         ).setOnClickListener(
                 v -> activity.showScreen(
-                        MainActivity.ALERTS
+                        MainActivity.PROBLEM_REPORT
                 )
         );
 

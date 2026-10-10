@@ -14,4 +14,15 @@
         <item>Maragua</item>
     </string-array>
 
+    <string-array name="problem_types">
+        <item>Choose a problem type</item>
+        <item>Pest infestation</item>
+        <item>Suspected crop disease</item>
+        <item>Weather damage</item>
+        <item>Water or irrigation problem</item>
+        <item>Soil or nutrient issue</item>
+        <item>Physical crop damage</item>
+        <item>Other</item>
+    </string-array>
+
 </resources>

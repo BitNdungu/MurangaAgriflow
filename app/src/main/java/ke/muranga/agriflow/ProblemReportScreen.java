@@ -1,0 +1,1151 @@
+package ke.muranga.agriflow;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Typeface;
+import android.net.Uri;
+import android.provider.MediaStore;
+import android.text.InputType;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.Spinner;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.core.content.FileProvider;
+
+import java.io.File;
+import java.io.InputStream;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+
+public class ProblemReportScreen extends ScrollView {
+
+    private static final int REQUEST_CAMERA = 8101;
+    private static final int REQUEST_GALLERY = 8102;
+
+    private final MainActivity activity;
+    private final LinearLayout content;
+    private final ProblemReportDatabaseHelper database;
+    private final SharedPreferences preferences;
+
+    private Uri selectedPhotoUri;
+    private Uri pendingCameraUri;
+    private File pendingCameraFile;
+
+    private ImageView formPhotoPreview;
+    private TextView formPhotoStatus;
+
+    public ProblemReportScreen(MainActivity activity) {
+
+        super(activity);
+
+        this.activity = activity;
+
+        database =
+                new ProblemReportDatabaseHelper(activity);
+
+        preferences =
+                activity.getPreferencesStore();
+
+        content = new LinearLayout(activity);
+        content.setOrientation(LinearLayout.VERTICAL);
+
+        setFillViewport(true);
+
+        setBackgroundColor(
+                activity.color(R.color.background)
+        );
+
+        addView(
+                content,
+                new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+        );
+
+        build();
+    }
+
+    // ============================================================
+    // SCREEN
+    // ============================================================
+
+    private void build() {
+
+        LinearLayout header =
+                new LinearLayout(activity);
+
+        header.setOrientation(LinearLayout.VERTICAL);
+
+        header.setPadding(
+                activity.dp(18),
+                activity.dp(20),
+                activity.dp(18),
+                activity.dp(8)
+        );
+
+        header.addView(
+                activity.text(
+                        "FARM SUPPORT",
+                        11,
+                        R.color.brand_green,
+                        Typeface.BOLD
+                )
+        );
+
+        header.addView(
+                activity.text(
+                        "Farm problem reports",
+                        25,
+                        R.color.text_primary,
+                        Typeface.BOLD
+                )
+        );
+
+        content.addView(header);
+
+        TextView introduction =
+                activity.text(
+                        "Record pests, suspected diseases, crop damage "
+                                + "or other problems affecting your farm.",
+                        14,
+                        R.color.text_secondary,
+                        Typeface.NORMAL
+                );
+
+        introduction.setPadding(
+                activity.dp(18),
+                activity.dp(8),
+                activity.dp(18),
+                activity.dp(12)
+        );
+
+        content.addView(introduction);
+
+        LinearLayout locationCard = activity.card();
+
+        locationCard.addView(
+                activity.text(
+                        "REPORTING LOCATION",
+                        12,
+                        R.color.brand_green,
+                        Typeface.BOLD
+                )
+        );
+
+        locationCard.addView(
+                activity.text(
+                        getReportingLocation(),
+                        15,
+                        R.color.text_primary,
+                        Typeface.NORMAL
+                )
+        );
+
+        content.addView(locationCard);
+
+        Button newReportButton =
+                activity.primaryButton(
+                        "Report a farm problem"
+                );
+
+        newReportButton.setOnClickListener(
+                v -> showNewReportDialog()
+        );
+
+        content.addView(
+                newReportButton,
+                activity.marginParams(
+                        18,
+                        14,
+                        18,
+                        14
+                )
+        );
+
+        content.addView(
+                activity.sectionTitle(
+                        "MY PREVIOUS REPORTS"
+                )
+        );
+
+        displayReports();
+
+        LinearLayout note = activity.coloredCard(
+                R.color.brand_green_light
+        );
+
+        note.addView(
+                activity.text(
+                        "Saved on this phone",
+                        15,
+                        R.color.brand_green_dark,
+                        Typeface.BOLD
+                )
+        );
+
+        note.addView(
+                activity.text(
+                        "These reports have not yet been sent to county "
+                                + "staff. Online submission and extension-officer "
+                                + "follow-up will be added with backend integration.",
+                        13,
+                        R.color.text_primary,
+                        Typeface.NORMAL
+                )
+        );
+
+        content.addView(
+                note,
+                activity.marginParams(
+                        18,
+                        12,
+                        18,
+                        24
+                )
+        );
+    }
+
+    private String getReportingLocation() {
+
+        String subcounty =
+                preferences.getString("subcounty", "");
+
+        String ward =
+                preferences.getString("ward", "");
+
+        if (subcounty.trim().isEmpty()) {
+            return "Sub-county not set. Complete your farmer profile "
+                    + "before submitting a report.";
+        }
+
+        String location =
+                "Murang'a County • " + subcounty;
+
+        if (!ward.trim().isEmpty()) {
+            location += " • " + ward;
+        }
+
+        return location;
+    }
+
+    // ============================================================
+    // NEW REPORT
+    // ============================================================
+
+    private void showNewReportDialog() {
+
+        String subcounty =
+                preferences.getString("subcounty", "").trim();
+
+        if (subcounty.isEmpty()) {
+
+            new AlertDialog.Builder(activity)
+                    .setTitle("Farm location required")
+                    .setMessage(
+                            "Please select your sub-county in your "
+                                    + "farmer profile before reporting a problem."
+                    )
+                    .setNegativeButton(
+                            "Cancel",
+                            null
+                    )
+                    .setPositiveButton(
+                            "Open profile",
+                            (dialog, which) ->
+                                    activity.showScreen(
+                                            MainActivity.PROFILE
+                                    )
+                    )
+                    .show();
+
+            return;
+        }
+
+        selectedPhotoUri = null;
+        pendingCameraUri = null;
+        pendingCameraFile = null;
+
+        LinearLayout form = new LinearLayout(activity);
+        form.setOrientation(LinearLayout.VERTICAL);
+
+        // Problem category
+        form.addView(
+                activity.fieldLabel("Problem type")
+        );
+
+        Spinner categorySpinner = new Spinner(
+                activity,
+                Spinner.MODE_DROPDOWN
+        );
+
+        ArrayAdapter<CharSequence> categoryAdapter =
+                ArrayAdapter.createFromResource(
+                        activity,
+                        R.array.problem_types,
+                        android.R.layout.simple_spinner_item
+                );
+
+        categoryAdapter.setDropDownViewResource(
+                android.R.layout.simple_spinner_dropdown_item
+        );
+
+        categorySpinner.setAdapter(categoryAdapter);
+
+        LinearLayout.LayoutParams spinnerParams =
+                activity.marginParams(
+                        18,
+                        0,
+                        18,
+                        8
+                );
+
+        spinnerParams.height = activity.dp(52);
+
+        form.addView(
+                categorySpinner,
+                spinnerParams
+        );
+
+        // Affected crop
+        form.addView(
+                activity.fieldLabel("Affected crop / enterprise")
+        );
+
+        EditText cropField = activity.inputField(
+                "e.g. avocado, coffee or tea",
+                "",
+                InputType.TYPE_CLASS_TEXT
+                        | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        );
+
+        form.addView(cropField);
+
+        // Description
+        form.addView(
+                activity.fieldLabel("Describe the problem")
+        );
+
+        EditText descriptionField = new EditText(activity);
+
+        descriptionField.setHint(
+                "What have you noticed? When did it start? "
+                        + "How much of the crop is affected?"
+        );
+
+        descriptionField.setTextSize(15);
+
+        descriptionField.setTextColor(
+                activity.color(R.color.text_primary)
+        );
+
+        descriptionField.setHintTextColor(
+                activity.color(R.color.text_secondary)
+        );
+
+        descriptionField.setInputType(
+                InputType.TYPE_CLASS_TEXT
+                        | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                        | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        );
+
+        descriptionField.setSingleLine(false);
+        descriptionField.setMinLines(3);
+        descriptionField.setMaxLines(6);
+        descriptionField.setGravity(
+                Gravity.TOP | Gravity.START
+        );
+
+        descriptionField.setPadding(
+                activity.dp(14),
+                activity.dp(12),
+                activity.dp(14),
+                activity.dp(12)
+        );
+
+        descriptionField.setBackground(
+                activity.roundedBorderBackground(
+                        activity.color(R.color.surface),
+                        activity.color(R.color.border),
+                        12
+                )
+        );
+
+        form.addView(
+                descriptionField,
+                activity.marginParams(
+                        18,
+                        0,
+                        18,
+                        10
+                )
+        );
+
+        // Photo controls
+        form.addView(
+                activity.fieldLabel("Photo (optional)")
+        );
+
+        TextView photoExplanation =
+                activity.text(
+                        "A photo can help describe the problem, but "
+                                + "you can submit without one.",
+                        13,
+                        R.color.text_secondary,
+                        Typeface.NORMAL
+                );
+
+        photoExplanation.setPadding(
+                activity.dp(18),
+                0,
+                activity.dp(18),
+                activity.dp(8)
+        );
+
+        form.addView(photoExplanation);
+
+        LinearLayout photoButtons =
+                new LinearLayout(activity);
+
+        photoButtons.setOrientation(LinearLayout.HORIZONTAL);
+
+        Button cameraButton =
+                activity.secondaryButton("Take photo");
+
+        Button galleryButton =
+                activity.secondaryButton("Choose photo");
+
+        LinearLayout.LayoutParams photoButtonParams =
+                new LinearLayout.LayoutParams(
+                        0,
+                        activity.dp(48),
+                        1
+                );
+
+        photoButtonParams.setMargins(
+                activity.dp(18),
+                0,
+                activity.dp(4),
+                0
+        );
+
+        photoButtons.addView(
+                cameraButton,
+                photoButtonParams
+        );
+
+        LinearLayout.LayoutParams galleryParams =
+                new LinearLayout.LayoutParams(
+                        0,
+                        activity.dp(48),
+                        1
+                );
+
+        galleryParams.setMargins(
+                activity.dp(4),
+                0,
+                activity.dp(18),
+                0
+        );
+
+        photoButtons.addView(
+                galleryButton,
+                galleryParams
+        );
+
+        form.addView(photoButtons);
+
+        formPhotoStatus =
+                activity.text(
+                        "No photo attached",
+                        13,
+                        R.color.text_secondary,
+                        Typeface.NORMAL
+                );
+
+        formPhotoStatus.setPadding(
+                activity.dp(18),
+                activity.dp(8),
+                activity.dp(18),
+                activity.dp(6)
+        );
+
+        form.addView(formPhotoStatus);
+
+        formPhotoPreview = new ImageView(activity);
+
+        formPhotoPreview.setScaleType(
+                ImageView.ScaleType.CENTER_CROP
+        );
+
+        formPhotoPreview.setVisibility(View.GONE);
+
+        form.addView(
+                formPhotoPreview,
+                activity.marginParams(
+                        18,
+                        0,
+                        18,
+                        12
+                )
+        );
+
+        // Scrollable form
+        ScrollView scrollForm = new ScrollView(activity);
+
+        scrollForm.setFillViewport(false);
+
+        scrollForm.addView(
+                form,
+                new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT
+                )
+        );
+
+        AlertDialog dialog =
+                new AlertDialog.Builder(activity)
+                        .setTitle("Report farm problem")
+                        .setView(scrollForm)
+                        .setNegativeButton(
+                                "Cancel",
+                                null
+                        )
+                        .setPositiveButton(
+                                "Save report",
+                                null
+                        )
+                        .create();
+
+        cameraButton.setOnClickListener(
+                v -> launchCamera()
+        );
+
+        galleryButton.setOnClickListener(
+                v -> launchGallery()
+        );
+
+        dialog.setOnShowListener(d -> {
+
+            Button saveButton =
+                    dialog.getButton(
+                            AlertDialog.BUTTON_POSITIVE
+                    );
+
+            saveButton.setOnClickListener(v -> {
+
+                if (categorySpinner.getSelectedItemPosition() == 0) {
+
+                    Toast.makeText(
+                            activity,
+                            "Please select a problem type",
+                            Toast.LENGTH_SHORT
+                    ).show();
+
+                    categorySpinner.performClick();
+                    return;
+                }
+
+                String crop =
+                        cropField.getText()
+                                .toString()
+                                .trim();
+
+                if (crop.isEmpty()) {
+
+                    cropField.setError(
+                            "Enter the affected crop"
+                    );
+
+                    return;
+                }
+
+                String description =
+                        descriptionField.getText()
+                                .toString()
+                                .trim();
+
+                if (description.isEmpty()) {
+
+                    descriptionField.setError(
+                            "Describe the problem"
+                    );
+
+                    return;
+                }
+
+                String ward =
+                        preferences.getString("ward", "").trim();
+
+                String photo =
+                        selectedPhotoUri == null
+                                ? ""
+                                : selectedPhotoUri.toString();
+
+                String createdAt =
+                        new SimpleDateFormat(
+                                "yyyy-MM-dd HH:mm",
+                                Locale.getDefault()
+                        ).format(new Date());
+
+                FarmProblemReport report =
+                        new FarmProblemReport(
+                                0,
+                                categorySpinner.getSelectedItem().toString(),
+                                crop,
+                                subcounty,
+                                ward,
+                                description,
+                                photo,
+                                createdAt
+                        );
+
+                long id = database.insertReport(report);
+
+                if (id <= 0) {
+
+                    Toast.makeText(
+                            activity,
+                            "Could not save the report",
+                            Toast.LENGTH_SHORT
+                    ).show();
+
+                    return;
+                }
+
+                dialog.dismiss();
+
+                Toast.makeText(
+                        activity,
+                        "Problem report saved on this phone",
+                        Toast.LENGTH_SHORT
+                ).show();
+
+                activity.showScreen(
+                        MainActivity.PROBLEM_REPORT
+                );
+            });
+        });
+
+        dialog.setOnDismissListener(d -> {
+            formPhotoPreview = null;
+            formPhotoStatus = null;
+        });
+
+        dialog.show();
+    }
+
+    // ============================================================
+    // CAMERA AND GALLERY
+    // ============================================================
+
+    private void launchCamera() {
+
+        try {
+
+            File directory = new File(
+                    activity.getFilesDir(),
+                    "problem_photos"
+            );
+
+            if (!directory.exists() && !directory.mkdirs()) {
+
+                Toast.makeText(
+                        activity,
+                        "Could not prepare photo storage",
+                        Toast.LENGTH_SHORT
+                ).show();
+
+                return;
+            }
+
+            pendingCameraFile =
+                    File.createTempFile(
+                            "problem_",
+                            ".jpg",
+                            directory
+                    );
+
+            pendingCameraUri =
+                    FileProvider.getUriForFile(
+                            activity,
+                            activity.getPackageName()
+                                    + ".fileprovider",
+                            pendingCameraFile
+                    );
+
+            Intent intent =
+                    new Intent(
+                            MediaStore.ACTION_IMAGE_CAPTURE
+                    );
+
+            intent.putExtra(
+                    MediaStore.EXTRA_OUTPUT,
+                    pendingCameraUri
+            );
+
+            intent.addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            | Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            );
+
+            intent.setClipData(
+                    ClipData.newRawUri(
+                            "Problem photo",
+                            pendingCameraUri
+                    )
+            );
+
+            activity.startActivityForResult(
+                    intent,
+                    REQUEST_CAMERA
+            );
+
+        } catch (Exception e) {
+
+            if (pendingCameraFile != null) {
+                pendingCameraFile.delete();
+            }
+
+            pendingCameraFile = null;
+            pendingCameraUri = null;
+
+            Toast.makeText(
+                    activity,
+                    "Could not open the camera. You can choose a photo instead.",
+                    Toast.LENGTH_LONG
+            ).show();
+        }
+    }
+
+    private void launchGallery() {
+
+        try {
+
+            Intent intent =
+                    new Intent(Intent.ACTION_OPEN_DOCUMENT);
+
+            intent.addCategory(
+                    Intent.CATEGORY_OPENABLE
+            );
+
+            intent.setType("image/*");
+
+            intent.addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+            );
+
+            activity.startActivityForResult(
+                    intent,
+                    REQUEST_GALLERY
+            );
+
+        } catch (Exception e) {
+
+            Toast.makeText(
+                    activity,
+                    "Could not open the image picker",
+                    Toast.LENGTH_SHORT
+            ).show();
+        }
+    }
+
+    public void handleActivityResult(
+            int requestCode,
+            int resultCode,
+            Intent data
+    ) {
+
+        if (requestCode != REQUEST_CAMERA
+                && requestCode != REQUEST_GALLERY) {
+            return;
+        }
+
+        if (resultCode != Activity.RESULT_OK) {
+
+            if (requestCode == REQUEST_CAMERA) {
+
+                if (pendingCameraFile != null) {
+                    pendingCameraFile.delete();
+                }
+
+                pendingCameraFile = null;
+                pendingCameraUri = null;
+
+                showPhotoPreview(selectedPhotoUri);
+            }
+
+            return;
+        }
+
+        if (requestCode == REQUEST_CAMERA) {
+
+            if (pendingCameraUri != null) {
+
+                selectedPhotoUri = pendingCameraUri;
+
+                pendingCameraUri = null;
+                pendingCameraFile = null;
+
+                showPhotoPreview(selectedPhotoUri);
+            }
+
+        } else if (requestCode == REQUEST_GALLERY) {
+
+            if (data == null || data.getData() == null) {
+                return;
+            }
+
+            Uri chosenUri = data.getData();
+
+            int grantedFlags =
+                    data.getFlags()
+                            & (Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+
+            try {
+
+                if ((grantedFlags
+                        & Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0) {
+
+                    activity.getContentResolver()
+                            .takePersistableUriPermission(
+                                    chosenUri,
+                                    grantedFlags
+                            );
+                }
+
+            } catch (SecurityException ignored) {
+                // If persistence is unavailable, keep the granted URI
+                // for this session. We do not block the report.
+            }
+
+            selectedPhotoUri = chosenUri;
+
+            showPhotoPreview(selectedPhotoUri);
+        }
+    }
+
+    private void showPhotoPreview(Uri uri) {
+
+        if (formPhotoPreview == null
+                || formPhotoStatus == null) {
+            return;
+        }
+
+        if (uri == null) {
+
+            formPhotoPreview.setVisibility(View.GONE);
+
+            formPhotoStatus.setText(
+                    "No photo attached"
+            );
+
+            return;
+        }
+
+        Bitmap bitmap =
+                decodeSampledBitmap(uri, 480, 320);
+
+        if (bitmap == null) {
+
+            formPhotoPreview.setVisibility(View.GONE);
+
+            formPhotoStatus.setText(
+                    "Photo selected; preview unavailable"
+            );
+
+            return;
+        }
+
+        formPhotoPreview.setImageBitmap(bitmap);
+
+        formPhotoPreview.setVisibility(View.VISIBLE);
+
+        formPhotoStatus.setText(
+                "Photo attached"
+        );
+    }
+
+    // Scale image previews to protect memory on low-end phones.
+    private Bitmap decodeSampledBitmap(
+            Uri uri,
+            int requestedWidth,
+            int requestedHeight
+    ) {
+
+        BitmapFactory.Options bounds =
+                new BitmapFactory.Options();
+
+        bounds.inJustDecodeBounds = true;
+
+        try (InputStream input =
+                     activity.getContentResolver()
+                             .openInputStream(uri)) {
+
+            if (input == null) {
+                return null;
+            }
+
+            BitmapFactory.decodeStream(
+                    input,
+                    null,
+                    bounds
+            );
+
+        } catch (Exception e) {
+            return null;
+        }
+
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) {
+            return null;
+        }
+
+        int sampleSize = 1;
+
+        while (
+                bounds.outWidth / sampleSize > requestedWidth * 2
+                        || bounds.outHeight / sampleSize > requestedHeight * 2
+        ) {
+
+            sampleSize *= 2;
+        }
+
+        BitmapFactory.Options options =
+                new BitmapFactory.Options();
+
+        options.inSampleSize = sampleSize;
+
+        try (InputStream input =
+                     activity.getContentResolver()
+                             .openInputStream(uri)) {
+
+            if (input == null) {
+                return null;
+            }
+
+            return BitmapFactory.decodeStream(
+                    input,
+                    null,
+                    options
+            );
+
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // ============================================================
+    // SAVED REPORTS
+    // ============================================================
+
+    private void displayReports() {
+
+        List<FarmProblemReport> reports =
+                database.getAllReports();
+
+        if (reports.isEmpty()) {
+
+            LinearLayout emptyCard = activity.card();
+
+            emptyCard.addView(
+                    activity.text(
+                            "No reports recorded",
+                            17,
+                            R.color.text_primary,
+                            Typeface.BOLD
+                    )
+            );
+
+            emptyCard.addView(
+                    activity.text(
+                            "Your saved farm problem reports will appear here.",
+                            14,
+                            R.color.text_secondary,
+                            Typeface.NORMAL
+                    )
+            );
+
+            content.addView(emptyCard);
+
+            return;
+        }
+
+        for (FarmProblemReport report : reports) {
+
+            addReportCard(report);
+        }
+    }
+
+    private void addReportCard(FarmProblemReport report) {
+
+        LinearLayout card = activity.card();
+
+        card.addView(
+                activity.text(
+                        report.getCategory(),
+                        18,
+                        R.color.text_primary,
+                        Typeface.BOLD
+                )
+        );
+
+        card.addView(
+                activity.detailRow(
+                        "Affected crop",
+                        report.getCropAffected()
+                )
+        );
+
+        String location =
+                "Murang'a County • " + report.getSubcounty();
+
+        if (report.getWard() != null
+                && !report.getWard().trim().isEmpty()) {
+
+            location += " • " + report.getWard();
+        }
+
+        card.addView(
+                activity.detailRow(
+                        "Location",
+                        location
+                )
+        );
+
+        card.addView(
+                activity.detailRow(
+                        "Date reported",
+                        report.getCreatedAt()
+                )
+        );
+
+        TextView description =
+                activity.text(
+                        report.getDescription(),
+                        14,
+                        R.color.text_primary,
+                        Typeface.NORMAL
+                );
+
+        description.setPadding(
+                0,
+                0,
+                0,
+                activity.dp(10)
+        );
+
+        card.addView(description);
+
+        String savedPhoto = report.getPhotoUri();
+
+        if (savedPhoto != null && !savedPhoto.trim().isEmpty()) {
+
+            Uri uri = Uri.parse(savedPhoto);
+
+            Bitmap bitmap =
+                    decodeSampledBitmap(uri, 480, 320);
+
+            if (bitmap != null) {
+
+                ImageView image = new ImageView(activity);
+
+                image.setImageBitmap(bitmap);
+
+                image.setScaleType(
+                        ImageView.ScaleType.CENTER_CROP
+                );
+
+                card.addView(
+                        image,
+                        new LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                activity.dp(160)
+                        )
+                );
+
+            } else {
+
+                TextView photoNote =
+                        activity.text(
+                                "A photo was attached to this report.",
+                                13,
+                                R.color.text_secondary,
+                                Typeface.NORMAL
+                        );
+
+                card.addView(photoNote);
+            }
+        }
+
+        TextView localStatus =
+                activity.text(
+                        "Saved locally • Not yet submitted",
+                        12,
+                        R.color.brand_green,
+                        Typeface.BOLD
+                );
+
+        localStatus.setPadding(
+                0,
+                activity.dp(8),
+                0,
+                activity.dp(8)
+        );
+
+        card.addView(localStatus);
+
+        Button removeButton =
+                activity.secondaryButton(
+                        "Delete report"
+                );
+
+        removeButton.setOnClickListener(
+                v -> new AlertDialog.Builder(activity)
+                        .setTitle("Delete report?")
+                        .setMessage(
+                                "This will permanently remove this report "
+                                        + "from this phone."
+                        )
+                        .setNegativeButton(
+                                "Cancel",
+                                null
+                        )
+                        .setPositiveButton(
+                                "Delete",
+                                (dialog, which) -> {
+
+                                    database.deleteReport(
+                                            report.getId()
+                                    );
+
+                                    activity.showScreen(
+                                            MainActivity.PROBLEM_REPORT
+                                    );
+                                }
+                        )
+                        .show()
+        );
+
+        card.addView(removeButton);
+
+        content.addView(card);
+    }
+}
