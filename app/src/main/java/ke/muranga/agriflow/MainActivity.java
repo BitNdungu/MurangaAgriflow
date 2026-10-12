@@ -39,6 +39,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String APPEARANCE_KEY = "appearance";
 
     private SharedPreferences preferences;
+    private AgriflowApiClient apiClient;
 
     private FrameLayout contentFrame;
     private LinearLayout bottomNavigation;
@@ -58,6 +59,10 @@ public class MainActivity extends AppCompatActivity {
         preferences = getSharedPreferences(
                 PREFS_NAME,
                 Context.MODE_PRIVATE
+        );
+
+        apiClient = new AgriflowApiClient(
+                getApplicationContext()
         );
 
         buildMainLayout();
@@ -566,6 +571,10 @@ public class MainActivity extends AppCompatActivity {
         return preferences;
     }
 
+    public AgriflowApiClient getApiClient() {
+        return apiClient;
+    }
+
     // ============================================================
     // SHARED UI HELPERS
     // ============================================================
@@ -1071,5 +1080,14 @@ public class MainActivity extends AppCompatActivity {
         );
 
         return drawable;
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (apiClient != null) {
+            apiClient.close();
+        }
+
+        super.onDestroy();
     }
 }
