@@ -14,7 +14,7 @@ public class ProblemReportDatabaseHelper extends SQLiteOpenHelper {
     private static final String DATABASE_NAME =
             "agriflow_problem_reports.db";
 
-    private static final int DATABASE_VERSION = 1;
+    private static final int DATABASE_VERSION = 2;
 
     private static final String TABLE_REPORTS =
             "problem_reports";
@@ -79,21 +79,94 @@ public class ProblemReportDatabaseHelper extends SQLiteOpenHelper {
                         " TEXT, " +
 
                         COLUMN_CREATED_AT +
-                        " TEXT NOT NULL" +
+                        " TEXT NOT NULL, " +
+
+                        COLUMN_SERVER_REPORT_ID +
+                        " INTEGER, " +
+
+                        COLUMN_SYNC_STATUS +
+                        " TEXT NOT NULL DEFAULT 'pending', " +
+
+                        COLUMN_SYNC_ERROR +
+                        " TEXT NOT NULL DEFAULT '', " +
+
+                        COLUMN_PHOTO_SYNC_STATUS +
+                        " TEXT NOT NULL DEFAULT 'not_needed', " +
+
+                        COLUMN_PHOTO_SYNC_ERROR +
+                        " TEXT NOT NULL DEFAULT ''" +
                         ")";
 
         db.execSQL(sql);
     }
+	private static final String COLUMN_SERVER_REPORT_ID =
+        "server_report_id";
+
+    private static final String COLUMN_SYNC_STATUS =
+        "sync_status";
+
+    private static final String COLUMN_SYNC_ERROR =
+        "sync_error";
+
+    private static final String COLUMN_PHOTO_SYNC_STATUS =
+        "photo_sync_status";
+
+    private static final String COLUMN_PHOTO_SYNC_ERROR =
+        "photo_sync_error";
 
     @Override
     public void onUpgrade(
-            SQLiteDatabase db,
-            int oldVersion,
-            int newVersion
+        SQLiteDatabase db,
+        int oldVersion,
+        int newVersion
     ) {
-        // Preserve existing reports.
-        // Future schema changes must use explicit migrations.
+    if (oldVersion < 2) {
+        db.execSQL(
+                "ALTER TABLE " + TABLE_REPORTS
+                        + " ADD COLUMN "
+                        + COLUMN_SERVER_REPORT_ID
+                        + " INTEGER"
+        );
+
+        db.execSQL(
+                "ALTER TABLE " + TABLE_REPORTS
+                        + " ADD COLUMN "
+                        + COLUMN_SYNC_STATUS
+                        + " TEXT NOT NULL DEFAULT 'pending'"
+        );
+
+        db.execSQL(
+                "ALTER TABLE " + TABLE_REPORTS
+                        + " ADD COLUMN "
+                        + COLUMN_SYNC_ERROR
+                        + " TEXT NOT NULL DEFAULT ''"
+        );
+
+        db.execSQL(
+                "ALTER TABLE " + TABLE_REPORTS
+                        + " ADD COLUMN "
+                        + COLUMN_PHOTO_SYNC_STATUS
+                        + " TEXT NOT NULL DEFAULT 'not_needed'"
+        );
+
+        db.execSQL(
+                "ALTER TABLE " + TABLE_REPORTS
+                        + " ADD COLUMN "
+                        + COLUMN_PHOTO_SYNC_ERROR
+                        + " TEXT NOT NULL DEFAULT ''"
+        );
+
+        // Existing reports with local photos need uploading.
+        db.execSQL(
+                "UPDATE " + TABLE_REPORTS
+                        + " SET " + COLUMN_PHOTO_SYNC_STATUS
+                        + " = 'pending'"
+                        + " WHERE " + COLUMN_PHOTO_URI
+                        + " IS NOT NULL AND TRIM("
+                        + COLUMN_PHOTO_URI + ") <> ''"
+        );
     }
+}
 
     public long insertReport(FarmProblemReport report) {
 
@@ -134,6 +207,26 @@ public class ProblemReportDatabaseHelper extends SQLiteOpenHelper {
         values.put(
                 COLUMN_CREATED_AT,
                 report.getCreatedAt()
+        );
+
+        values.put(
+                COLUMN_SYNC_STATUS,
+                report.getSyncStatus()
+        );
+
+        values.put(
+                COLUMN_SYNC_ERROR,
+                report.getSyncError()
+        );
+
+        values.put(
+                COLUMN_PHOTO_SYNC_STATUS,
+                report.getPhotoSyncStatus()
+        );
+
+        values.put(
+                COLUMN_PHOTO_SYNC_ERROR,
+                report.getPhotoSyncError()
         );
 
         return db.insert(
@@ -210,6 +303,41 @@ public class ProblemReportDatabaseHelper extends SQLiteOpenHelper {
                         )
                 );
 
+                Long serverReportId = null;
+
+                int serverIdColumn =
+                        cursor.getColumnIndexOrThrow(
+                                COLUMN_SERVER_REPORT_ID
+                        );
+
+                if (!cursor.isNull(serverIdColumn)) {
+                    serverReportId = cursor.getLong(serverIdColumn);
+                }
+
+                String syncStatus = cursor.getString(
+                        cursor.getColumnIndexOrThrow(
+                                COLUMN_SYNC_STATUS
+                        )
+                );
+
+                String syncError = cursor.getString(
+                        cursor.getColumnIndexOrThrow(
+                                COLUMN_SYNC_ERROR
+                        )
+                );
+
+                String photoSyncStatus = cursor.getString(
+                        cursor.getColumnIndexOrThrow(
+                                COLUMN_PHOTO_SYNC_STATUS
+                        )
+                );
+
+                String photoSyncError = cursor.getString(
+                        cursor.getColumnIndexOrThrow(
+                                COLUMN_PHOTO_SYNC_ERROR
+                        )
+                );
+
                 reports.add(
                         new FarmProblemReport(
                                 id,
@@ -219,7 +347,12 @@ public class ProblemReportDatabaseHelper extends SQLiteOpenHelper {
                                 ward,
                                 description,
                                 photoUri,
-                                createdAt
+                                createdAt,
+                                serverReportId,
+                                syncStatus,
+                                syncError,
+                                photoSyncStatus,
+                                photoSyncError
                         )
                 );
             }
@@ -240,4 +373,74 @@ public class ProblemReportDatabaseHelper extends SQLiteOpenHelper {
                 }
         );
     }
+
+    public boolean markReportSynced(
+            long localReportId,
+            long serverReportId
+    ) {
+        SQLiteDatabase db = getWritableDatabase();
+
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_SERVER_REPORT_ID, serverReportId);
+        values.put(COLUMN_SYNC_STATUS, "synced");
+        values.put(COLUMN_SYNC_ERROR, "");
+
+        return db.update(
+                TABLE_REPORTS,
+                values,
+                COLUMN_ID + " = ?",
+                new String[]{
+                        String.valueOf(localReportId)
+                }
+        ) > 0;
+    }
+
+    public boolean updateReportSyncState(
+            long localReportId,
+            String status,
+            String error
+    ) {
+        SQLiteDatabase db = getWritableDatabase();
+
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_SYNC_STATUS, status);
+        values.put(
+                COLUMN_SYNC_ERROR,
+                error == null ? "" : error
+        );
+
+        return db.update(
+                TABLE_REPORTS,
+                values,
+                COLUMN_ID + " = ?",
+                new String[]{
+                        String.valueOf(localReportId)
+                }
+        ) > 0;
+    }
+
+    public boolean updatePhotoSyncState(
+            long localReportId,
+            String status,
+            String error
+    ) {
+        SQLiteDatabase db = getWritableDatabase();
+
+        ContentValues values = new ContentValues();
+        values.put(COLUMN_PHOTO_SYNC_STATUS, status);
+        values.put(
+                COLUMN_PHOTO_SYNC_ERROR,
+                error == null ? "" : error
+        );
+
+        return db.update(
+                TABLE_REPORTS,
+                values,
+                COLUMN_ID + " = ?",
+                new String[]{
+                        String.valueOf(localReportId)
+                }
+        ) > 0;
+    }
+
 }
