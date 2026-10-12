@@ -32,6 +32,8 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 public class ProblemReportScreen extends ScrollView {
 
@@ -49,6 +51,8 @@ public class ProblemReportScreen extends ScrollView {
 
     private ImageView formPhotoPreview;
     private TextView formPhotoStatus;
+    private Button syncButton;
+    private TextView syncStatusText;
 
     public ProblemReportScreen(MainActivity activity) {
 
@@ -178,6 +182,48 @@ public class ProblemReportScreen extends ScrollView {
                         14
                 )
         );
+        syncButton = activity.secondaryButton("Sync with county");
+
+        syncButton.setOnClickListener(
+                v -> syncWithCounty()
+        );
+
+        content.addView(
+                syncButton,
+                activity.marginParams(
+                        18,
+                        2,
+                        18,
+                        6
+                )
+        );
+
+        syncStatusText = activity.text(
+                preferences.getString(
+                        "last_sync_message",
+                        "Reports are saved on this phone until synced."
+                ),
+                13,
+                R.color.text_secondary,
+                Typeface.NORMAL
+        );
+
+        syncStatusText.setPadding(
+                activity.dp(18),
+                activity.dp(4),
+                activity.dp(18),
+                activity.dp(10)
+        );
+
+        content.addView(
+                syncStatusText,
+                activity.marginParams(
+                        18,
+                        0,
+                        18,
+                        8
+                )
+        );
 
         content.addView(
                 activity.sectionTitle(
@@ -202,9 +248,9 @@ public class ProblemReportScreen extends ScrollView {
 
         note.addView(
                 activity.text(
-                        "These reports have not yet been sent to county "
-                                + "staff. Online submission and extension-officer "
-                                + "follow-up will be added with backend integration.",
+                        "Reports are saved on this phone first. Use Sync with county "
+                                + "when a connection is available. Photo synchronization "
+                                + "will be completed separately.",
                         13,
                         R.color.text_primary,
                         Typeface.NORMAL
@@ -221,6 +267,390 @@ public class ProblemReportScreen extends ScrollView {
                 )
         );
     }
+
+    private void syncWithCounty() {
+        String fullName = preferences.getString(
+                "full_name", ""
+        ).trim();
+
+        String phone = preferences.getString(
+                "phone", ""
+        ).trim();
+
+        String subcounty = preferences.getString(
+                "subcounty", ""
+        ).trim();
+
+        String ward = preferences.getString(
+                "ward", ""
+        ).trim();
+
+        String farmSize = preferences.getString(
+                "farm_size", ""
+        ).trim();
+
+        String enterprise = preferences.getString(
+                "main_enterprise", ""
+        ).trim();
+
+        if (fullName.isEmpty()
+                || phone.isEmpty()
+                || subcounty.isEmpty()) {
+            syncStatusText.setText(
+                    "Complete your name, phone and sub-county "
+                            + "in Farmer Profile before syncing."
+            );
+            return;
+        }
+
+        JSONObject farmerPayload = new JSONObject();
+
+        try {
+            farmerPayload.put("full_name", fullName);
+            farmerPayload.put("phone", phone);
+            farmerPayload.put("county", "Murang'a County");
+            farmerPayload.put("subcounty", subcounty);
+            farmerPayload.put("ward", ward);
+            farmerPayload.put("main_enterprise", enterprise);
+
+            if (!farmSize.isEmpty()) {
+                double acres = Double.parseDouble(farmSize);
+
+                if (Double.isNaN(acres)
+                        || Double.isInfinite(acres)
+                        || acres <= 0) {
+                    syncStatusText.setText(
+                            "Correct your farm size in Farmer Profile."
+                    );
+                    return;
+                }
+
+                farmerPayload.put("farm_size_acres", acres);
+            }
+
+        } catch (JSONException | NumberFormatException exception) {
+            syncStatusText.setText(
+                    "Check your farmer profile details and try again."
+            );
+            return;
+        }
+
+        syncButton.setEnabled(false);
+        syncStatusText.setText("Checking connection to the county server...");
+
+        activity.getApiClient().checkHealth(
+                new AgriflowApiClient.Callback() {
+                    @Override
+                    public void onSuccess(JSONObject response) {
+                        if (!"ok".equals(
+                                response.optString("status")
+                        )) {
+                            finishSynchronizationWithError(
+                                    "The county server is not ready."
+                            );
+                            return;
+                        }
+
+                        syncFarmerProfile(farmerPayload);
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        finishSynchronizationWithError(
+                                "Cannot reach the county server. "
+                                        + "Check the connection and try again."
+                        );
+                    }
+                }
+        );
+    }
+
+    private void syncFarmerProfile(JSONObject payload) {
+        long existingServerFarmerId = preferences.getLong(
+                "backend_farmer_id",
+                0L
+        );
+
+        syncStatusText.setText("Synchronizing farmer profile...");
+
+        activity.getApiClient().syncFarmer(
+                existingServerFarmerId,
+                payload,
+                new AgriflowApiClient.Callback() {
+                    @Override
+                    public void onSuccess(JSONObject response) {
+                        JSONObject farmer =
+                                response.optJSONObject("farmer");
+
+                        if (farmer == null) {
+                            finishSynchronizationWithError(
+                                    "The server returned an unexpected "
+                                            + "farmer response."
+                            );
+                            return;
+                        }
+
+                        long serverFarmerId =
+                                farmer.optLong("id", 0L);
+
+                        if (serverFarmerId <= 0) {
+                            finishSynchronizationWithError(
+                                    "The server did not return a valid "
+                                            + "farmer ID."
+                            );
+                            return;
+                        }
+
+                        // Remember the ID assigned by the backend.
+                        preferences.edit()
+                                .putLong(
+                                        "backend_farmer_id",
+                                        serverFarmerId
+                                )
+                                .apply();
+
+                        List<FarmProblemReport> reports =
+                                database.getAllReports();
+
+                        syncReportsSequentially(
+                                reports,
+                                0,
+                                serverFarmerId,
+                                0,
+                                0
+                        );
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        finishSynchronizationWithError(
+                                "Farmer synchronization failed: "
+                                        + message
+                        );
+                    }
+                }
+        );
+    }
+
+    private void syncReportsSequentially(
+            List<FarmProblemReport> reports,
+            int index,
+            long serverFarmerId,
+            int submitted,
+            int failed
+    ) {
+        if (index >= reports.size()) {
+            finishSynchronization(
+                    reports.size(),
+                    submitted,
+                    failed
+            );
+            return;
+        }
+
+        FarmProblemReport report = reports.get(index);
+
+        // Never create a second report if we already saved its server ID.
+        if (report.getServerReportId() != null
+                && report.getServerReportId() > 0) {
+            syncReportsSequentially(
+                    reports,
+                    index + 1,
+                    serverFarmerId,
+                    submitted,
+                    failed
+            );
+            return;
+        }
+
+        database.updateReportSyncState(
+                report.getId(),
+                "syncing",
+                ""
+        );
+
+        syncStatusText.setText(
+                "Submitting report "
+                        + (index + 1)
+                        + " of "
+                        + reports.size()
+                        + "..."
+        );
+
+        JSONObject reportPayload = new JSONObject();
+
+        try {
+            reportPayload.put(
+                    "category",
+                    report.getCategory()
+            );
+
+            reportPayload.put(
+                    "crop_affected",
+                    report.getCropAffected()
+            );
+
+            reportPayload.put(
+                    "subcounty",
+                    report.getSubcounty()
+            );
+
+            reportPayload.put(
+                    "ward",
+                    report.getWard() == null
+                            ? ""
+                            : report.getWard()
+            );
+
+            reportPayload.put(
+                    "description",
+                    report.getDescription()
+            );
+
+        } catch (JSONException exception) {
+            database.updateReportSyncState(
+                    report.getId(),
+                    "failed",
+                    exception.getMessage()
+            );
+
+            syncReportsSequentially(
+                    reports,
+                    index + 1,
+                    serverFarmerId,
+                    submitted,
+                    failed + 1
+            );
+            return;
+        }
+
+        activity.getApiClient().createProblemReport(
+                serverFarmerId,
+                reportPayload,
+                new AgriflowApiClient.Callback() {
+                    @Override
+                    public void onSuccess(JSONObject response) {
+                        JSONObject remoteReport =
+                                response.optJSONObject("report");
+
+                        long serverReportId =
+                                remoteReport == null
+                                        ? 0L
+                                        : remoteReport.optLong("id", 0L);
+
+                        if (serverReportId <= 0) {
+                            database.updateReportSyncState(
+                                    report.getId(),
+                                    "failed",
+                                    "The server returned no report ID."
+                            );
+
+                            syncReportsSequentially(
+                                    reports,
+                                    index + 1,
+                                    serverFarmerId,
+                                    submitted,
+                                    failed + 1
+                            );
+                            return;
+                        }
+
+                        boolean saved = database.markReportSynced(
+                                report.getId(),
+                                serverReportId
+                        );
+
+                        if (saved) {
+                            syncReportsSequentially(
+                                    reports,
+                                    index + 1,
+                                    serverFarmerId,
+                                    submitted + 1,
+                                    failed
+                            );
+                        } else {
+                            syncReportsSequentially(
+                                    reports,
+                                    index + 1,
+                                    serverFarmerId,
+                                    submitted,
+                                    failed + 1
+                            );
+                        }
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        database.updateReportSyncState(
+                                report.getId(),
+                                "failed",
+                                message
+                        );
+
+                        syncReportsSequentially(
+                                reports,
+                                index + 1,
+                                serverFarmerId,
+                                submitted,
+                                failed + 1
+                        );
+                    }
+                }
+        );
+    }
+
+    private void finishSynchronization(
+            int total,
+            int submitted,
+            int failed
+    ) {
+        String message;
+
+        if (total == 0) {
+            message = "Farmer profile synced. No local reports to submit.";
+        } else if (failed == 0 && submitted == 0) {
+            message = "Sync complete. All reports were already submitted.";
+        } else {
+            message = "Sync finished: "
+                    + submitted
+                    + " report(s) submitted; "
+                    + failed
+                    + " failed.";
+        }
+
+        if (failed > 0) {
+            message += " Failed reports remain on this phone for retry.";
+        }
+
+        message += " Photo synchronization is still pending.";
+
+        preferences.edit()
+                .putString("last_sync_message", message)
+                .apply();
+
+        Toast.makeText(
+                activity,
+                message,
+                Toast.LENGTH_LONG
+        ).show();
+
+        activity.showScreen(MainActivity.PROBLEM_REPORT);
+    }
+
+    private void finishSynchronizationWithError(String message) {
+        preferences.edit()
+                .putString("last_sync_message", message)
+                .apply();
+
+        Toast.makeText(
+                activity,
+                message,
+                Toast.LENGTH_LONG
+        ).show();
+
+        activity.showScreen(MainActivity.PROBLEM_REPORT);
+    }
+
 
     private String getReportingLocation() {
 
@@ -822,15 +1252,24 @@ public class ProblemReportScreen extends ScrollView {
 
             try {
 
-                if ((grantedFlags
-                        & Intent.FLAG_GRANT_READ_URI_PERMISSION) != 0) {
 
-                    activity.getContentResolver()
-                            .takePersistableUriPermission(
-                                    chosenUri,
-                                    grantedFlags
-                            );
+                int persistableFlags = grantedFlags
+                        & (Intent.FLAG_GRANT_READ_URI_PERMISSION
+                        | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+
+                if (persistableFlags != 0) {
+                    try {
+                        activity.getContentResolver()
+                                .takePersistableUriPermission(
+                                        chosenUri,
+                                        persistableFlags
+                                );
+                    } catch (SecurityException exception) {
+                        // Some URI providers do not support persistent permissions.
+                        // Keep using the URI with the permission currently available.
+                    }
                 }
+
 
             } catch (SecurityException ignored) {
                 // If persistence is unavailable, keep the granted URI
@@ -1095,13 +1534,31 @@ public class ProblemReportScreen extends ScrollView {
             }
         }
 
+
+        String statusMessage;
+        int statusColor = R.color.text_secondary;
+
+        if (report.getServerReportId() != null
+                && report.getServerReportId() > 0) {
+            statusMessage = "Submitted to county • Report #"
+                    + report.getServerReportId();
+            statusColor = R.color.brand_green;
+        } else if ("failed".equals(report.getSyncStatus())) {
+            statusMessage = "Sync failed • Tap Sync with county to retry.";
+        } else if ("syncing".equals(report.getSyncStatus())) {
+            statusMessage = "Synchronization in progress...";
+        } else {
+            statusMessage = "Saved locally • Awaiting synchronization";
+        }
+
         TextView localStatus =
                 activity.text(
-                        "Saved locally • Not yet submitted",
+                        statusMessage,
                         12,
-                        R.color.brand_green,
+                        statusColor,
                         Typeface.BOLD
                 );
+
 
         localStatus.setPadding(
                 0,
