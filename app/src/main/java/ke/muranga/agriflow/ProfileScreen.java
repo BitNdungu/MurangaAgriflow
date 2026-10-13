@@ -13,6 +13,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.ArrayAdapter;
 import android.widget.Spinner;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.view.View;
 
 public class ProfileScreen extends ScrollView {
 
@@ -201,11 +204,69 @@ public class ProfileScreen extends ScrollView {
         );
 
         ArrayAdapter<CharSequence> subcountyAdapter =
-                ArrayAdapter.createFromResource(
+                new ArrayAdapter<CharSequence>(
                         activity,
-                        R.array.muranga_subcounties,
-                        android.R.layout.simple_spinner_item
-                );
+                        android.R.layout.simple_spinner_item,
+                        activity.getResources().getTextArray(
+                                R.array.muranga_subcounties
+                        )
+                ) {
+                    @Override
+                    public boolean isEnabled(int position) {
+                        // The prompt is visible but cannot be selected.
+                        return position != 0;
+                    }
+
+                    @Override
+                    public View getView(
+                            int position,
+                            View convertView,
+                            ViewGroup parent
+                    ) {
+                        View view = super.getView(
+                                position,
+                                convertView,
+                                parent
+                        );
+
+                        if (view instanceof TextView) {
+                            ((TextView) view).setTextColor(
+                                    activity.color(
+                                            position == 0
+                                                    ? R.color.text_secondary
+                                                    : R.color.text_primary
+                                    )
+                            );
+                        }
+
+                        return view;
+                    }
+
+                    @Override
+                    public View getDropDownView(
+                            int position,
+                            View convertView,
+                            ViewGroup parent
+                    ) {
+                        View view = super.getDropDownView(
+                                position,
+                                convertView,
+                                parent
+                        );
+
+                        if (view instanceof TextView) {
+                            ((TextView) view).setTextColor(
+                                    activity.color(
+                                            position == 0
+                                                    ? R.color.text_secondary
+                                                    : R.color.text_primary
+                                    )
+                            );
+                        }
+
+                        return view;
+                    }
+                };
 
         subcountyAdapter.setDropDownViewResource(
                 android.R.layout.simple_spinner_dropdown_item
@@ -213,32 +274,114 @@ public class ProfileScreen extends ScrollView {
 
         subcountySpinner.setAdapter(subcountyAdapter);
 
-
-
-        subcountySpinner.setPadding(
-                activity.dp(12),
-                activity.dp(8),
-                activity.dp(12),
-                activity.dp(8)
+// Restore the saved selection whenever this screen is opened.
+        String savedSubcounty = preferences.getString(
+                "subcounty",
+                ""
         );
 
-        LinearLayout.LayoutParams spinnerParams =
+        if (!savedSubcounty.trim().isEmpty()) {
+            for (int i = 1; i < subcountyAdapter.getCount(); i++) {
+                if (subcountyAdapter.getItem(i)
+                        .toString()
+                        .equalsIgnoreCase(savedSubcounty)) {
+                    subcountySpinner.setSelection(i);
+                    break;
+                }
+            }
+        }
+
+// Create a rounded textbox-style container.
+        GradientDrawable subcountyBackground =
+                new GradientDrawable();
+
+        subcountyBackground.setColor(
+                activity.color(R.color.surface)
+        );
+
+        subcountyBackground.setCornerRadius(
+                activity.dp(12)
+        );
+
+        subcountyBackground.setStroke(
+                activity.dp(1),
+                activity.color(R.color.border)
+        );
+
+        LinearLayout subcountyBox = new LinearLayout(activity);
+        subcountyBox.setOrientation(LinearLayout.HORIZONTAL);
+        subcountyBox.setGravity(Gravity.CENTER_VERTICAL);
+        subcountyBox.setBackground(subcountyBackground);
+
+        LinearLayout.LayoutParams subcountyBoxParams =
                 new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
                         activity.dp(52)
                 );
 
-        spinnerParams.setMargins(
+        subcountyBoxParams.setMargins(
                 activity.dp(18),
                 0,
                 activity.dp(18),
                 activity.dp(8)
         );
 
-        content.addView(
+// Keep the Spinner itself transparent so the rounded container shows.
+        subcountySpinner.setBackgroundColor(Color.TRANSPARENT);
+
+        subcountySpinner.setPadding(
+                activity.dp(12),
+                activity.dp(8),
+                0,
+                activity.dp(8)
+        );
+
+        LinearLayout.LayoutParams spinnerParams =
+                new LinearLayout.LayoutParams(
+                        0,
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        1f
+                );
+
+        subcountyBox.addView(
                 subcountySpinner,
                 spinnerParams
         );
+
+// Add a visible dropdown arrow at the right.
+        TextView dropdownArrow = activity.text(
+                "▾",
+                20,
+                R.color.text_secondary,
+                Typeface.NORMAL
+        );
+
+        dropdownArrow.setGravity(Gravity.CENTER);
+        dropdownArrow.setPadding(
+                0,
+                0,
+                activity.dp(12),
+                activity.dp(2)
+        );
+
+        subcountyBox.addView(
+                dropdownArrow,
+                new LinearLayout.LayoutParams(
+                        activity.dp(36),
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                )
+        );
+
+// Tapping the arrow or empty container also opens the dropdown.
+        subcountyBox.setOnClickListener(
+                v -> subcountySpinner.performClick()
+        );
+
+        content.addView(
+                subcountyBox,
+                subcountyBoxParams
+        );
+
 
         content.addView(
                 activity.fieldLabel(
@@ -377,6 +520,17 @@ public class ProfileScreen extends ScrollView {
 
                         phoneField.requestFocus();
 
+                        return;
+                    }
+
+                    if (subcountySpinner.getSelectedItemPosition() <= 0) {
+                        Toast.makeText(
+                                activity,
+                                "Please select your sub-county",
+                                Toast.LENGTH_SHORT
+                        ).show();
+
+                        subcountySpinner.performClick();
                         return;
                     }
 

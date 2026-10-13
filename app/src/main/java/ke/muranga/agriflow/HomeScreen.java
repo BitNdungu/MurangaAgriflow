@@ -10,6 +10,8 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.content.res.ColorStateList;
 import android.widget.ImageView;
+import android.content.res.Configuration;
+import android.graphics.Color;
 
 import androidx.appcompat.widget.SwitchCompat;
 
@@ -199,6 +201,21 @@ public class HomeScreen extends ScrollView {
 
         Button checkMarket =
                 activity.actionButton("Check market");
+
+        boolean darkMode =
+                (activity.getResources()
+                        .getConfiguration()
+                        .uiMode
+                        & Configuration.UI_MODE_NIGHT_MASK)
+                        == Configuration.UI_MODE_NIGHT_YES;
+
+        int quickActionTextColor = darkMode
+                ? activity.color(R.color.brand_green)
+                : activity.color(R.color.brand_green_dark);
+
+        addCrop.setTextColor(quickActionTextColor);
+        reportIssue.setTextColor(quickActionTextColor);
+        checkMarket.setTextColor(quickActionTextColor);
 
         addCrop.setOnClickListener(
                 v -> activity.showScreen(
