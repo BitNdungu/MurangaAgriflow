@@ -64,6 +64,8 @@ public class MainActivity extends AppCompatActivity {
         apiClient = new AgriflowApiClient(
                 getApplicationContext()
         );
+        AgriflowSyncScheduler.schedulePeriodicSync(this);
+        AgriflowSyncScheduler.enqueueSyncIfIdle(this);
 
         buildMainLayout();
         showScreen(HOME);

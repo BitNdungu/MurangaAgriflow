@@ -560,6 +560,7 @@ public class ProfileScreen extends ScrollView {
                                     enterprise
                             )
                             .apply();
+                    AgriflowSyncScheduler.enqueueSync(activity);
 
                     Toast.makeText(
                             activity,

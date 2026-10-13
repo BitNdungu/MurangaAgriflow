@@ -246,6 +246,41 @@ public final class AgriflowApiClient {
             long reportId,
             byte[] photoBytes
     ) throws Exception {
+        try {
+            return uploadPhotoRequestWithMethod(
+                    farmerId,
+                    reportId,
+                    photoBytes,
+                    "POST"
+            );
+        } catch (Exception exception) {
+            String message = exception.getMessage();
+
+            // The server may have saved the photo even if the app did not
+            // receive or persist the successful response. Reconcile that case
+            // through the backend's existing PUT replacement endpoint.
+            if (message != null
+                    && message.contains("HTTP 409:")
+                    && message.toLowerCase(java.util.Locale.ROOT)
+                            .contains("already has a photo")) {
+                return uploadPhotoRequestWithMethod(
+                        farmerId,
+                        reportId,
+                        photoBytes,
+                        "PUT"
+                );
+            }
+
+            throw exception;
+        }
+    }
+
+    private JSONObject uploadPhotoRequestWithMethod(
+            long farmerId,
+            long reportId,
+            byte[] photoBytes,
+            String requestMethod
+    ) throws Exception {
         HttpURLConnection connection = null;
 
         String path =
@@ -266,7 +301,7 @@ public final class AgriflowApiClient {
             connection =
                     (HttpURLConnection) url.openConnection();
 
-            connection.setRequestMethod("POST");
+            connection.setRequestMethod(requestMethod);
             connection.setConnectTimeout(CONNECT_TIMEOUT_MS);
             connection.setReadTimeout(READ_TIMEOUT_MS);
             connection.setUseCaches(false);

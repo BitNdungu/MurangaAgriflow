@@ -189,48 +189,51 @@ public class ProblemReportScreen extends ScrollView {
                         14
                 )
         );
-        syncButton = activity.secondaryButton("Sync with county");
+        // Manual sync is a development aid; farmer builds sync in the background.
+        if (BuildConfig.DEBUG) {
+            syncButton = activity.secondaryButton("Sync with county");
 
-        syncButton.setOnClickListener(
-                v -> syncWithCounty()
-        );
+            syncButton.setOnClickListener(
+                    v -> syncWithCounty()
+            );
 
-        content.addView(
-                syncButton,
-                activity.marginParams(
-                        18,
-                        2,
-                        18,
-                        6
-                )
-        );
+            content.addView(
+                    syncButton,
+                    activity.marginParams(
+                            18,
+                            2,
+                            18,
+                            6
+                    )
+            );
 
-        syncStatusText = activity.text(
-                preferences.getString(
-                        "last_sync_message",
-                        "Reports are saved on this phone until synced."
-                ),
-                13,
-                R.color.text_secondary,
-                Typeface.NORMAL
-        );
+            syncStatusText = activity.text(
+                    preferences.getString(
+                            "last_sync_message",
+                            "Reports are saved on this phone until synced."
+                    ),
+                    13,
+                    R.color.text_secondary,
+                    Typeface.NORMAL
+            );
 
-        syncStatusText.setPadding(
-                activity.dp(18),
-                activity.dp(4),
-                activity.dp(18),
-                activity.dp(10)
-        );
+            syncStatusText.setPadding(
+                    activity.dp(18),
+                    activity.dp(4),
+                    activity.dp(18),
+                    activity.dp(10)
+            );
 
-        content.addView(
-                syncStatusText,
-                activity.marginParams(
-                        18,
-                        0,
-                        18,
-                        8
-                )
-        );
+            content.addView(
+                    syncStatusText,
+                    activity.marginParams(
+                            18,
+                            0,
+                            18,
+                            8
+                    )
+            );
+        }
 
         content.addView(
                 activity.sectionTitle(
@@ -255,8 +258,10 @@ public class ProblemReportScreen extends ScrollView {
 
         note.addView(
                 activity.text(
-                        "Reports and attached photos are saved on this phone first. "
-                                + "Use Sync with county when a connection is available.",
+                        "Reports and attached photos are saved on this phone first "
+                                + "and synchronized automatically when a connection "
+                                + "is available. You can keep using the app while "
+                                + "synchronization runs.",
                         13,
                         R.color.text_primary,
                         Typeface.NORMAL
@@ -1198,6 +1203,9 @@ public class ProblemReportScreen extends ScrollView {
                     return;
                 }
 
+                // Queue background synchronization only after the local save succeeds.
+                AgriflowSyncScheduler.enqueueSync(activity);
+
                 dialog.dismiss();
 
                 Toast.makeText(
@@ -1793,7 +1801,7 @@ public class ProblemReportScreen extends ScrollView {
                 photoStatusColor = R.color.brand_green;
             } else if ("failed".equalsIgnoreCase(photoSyncStatus)) {
                 photoStatusMessage =
-                        "Photo upload failed • Tap Sync with county to retry.";
+                        "Photo upload failed • Will retry when a connection is available.";
             } else if ("syncing".equalsIgnoreCase(photoSyncStatus)) {
                 photoStatusMessage = "Uploading photo...";
             } else {
@@ -1827,7 +1835,7 @@ public class ProblemReportScreen extends ScrollView {
                     + report.getServerReportId();
             statusColor = R.color.brand_green;
         } else if ("failed".equals(report.getSyncStatus())) {
-            statusMessage = "Sync failed • Tap Sync with county to retry.";
+            statusMessage = "Sync failed • Will retry when a connection is available.";
         } else if ("syncing".equals(report.getSyncStatus())) {
             statusMessage = "Synchronization in progress...";
         } else {
