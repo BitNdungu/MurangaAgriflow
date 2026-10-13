@@ -417,6 +417,8 @@ public class ProblemReportScreen extends ScrollView {
                                 0,
                                 serverFarmerId,
                                 0,
+                                0,
+                                0,
                                 0
                         );
                     }
@@ -432,33 +434,42 @@ public class ProblemReportScreen extends ScrollView {
         );
     }
 
+
     private void syncReportsSequentially(
             List<FarmProblemReport> reports,
             int index,
             long serverFarmerId,
             int submitted,
-            int failed
+            int failed,
+            int photosUploaded,
+            int photosFailed
     ) {
         if (index >= reports.size()) {
             finishSynchronization(
                     reports.size(),
                     submitted,
-                    failed
+                    failed,
+                    photosUploaded,
+                    photosFailed
             );
             return;
         }
 
         FarmProblemReport report = reports.get(index);
+        Long existingServerReportId = report.getServerReportId();
 
-        // Never create a second report if we already saved its server ID.
-        if (report.getServerReportId() != null
-                && report.getServerReportId() > 0) {
-            syncReportsSequentially(
+        // A report already on the server must not be created again.
+        if (existingServerReportId != null
+                && existingServerReportId > 0L) {
+            syncPhotoThenContinue(
                     reports,
-                    index + 1,
+                    index,
                     serverFarmerId,
+                    existingServerReportId,
                     submitted,
-                    failed
+                    failed,
+                    photosUploaded,
+                    photosFailed
             );
             return;
         }
@@ -480,28 +491,19 @@ public class ProblemReportScreen extends ScrollView {
         JSONObject reportPayload = new JSONObject();
 
         try {
-            reportPayload.put(
-                    "category",
-                    report.getCategory()
-            );
-
+            reportPayload.put("category", report.getCategory());
             reportPayload.put(
                     "crop_affected",
                     report.getCropAffected()
             );
-
             reportPayload.put(
                     "subcounty",
                     report.getSubcounty()
             );
-
             reportPayload.put(
                     "ward",
-                    report.getWard() == null
-                            ? ""
-                            : report.getWard()
+                    report.getWard() == null ? "" : report.getWard()
             );
-
             reportPayload.put(
                     "description",
                     report.getDescription()
@@ -519,7 +521,9 @@ public class ProblemReportScreen extends ScrollView {
                     index + 1,
                     serverFarmerId,
                     submitted,
-                    failed + 1
+                    failed + 1,
+                    photosUploaded,
+                    photosFailed
             );
             return;
         }
@@ -550,7 +554,9 @@ public class ProblemReportScreen extends ScrollView {
                                     index + 1,
                                     serverFarmerId,
                                     submitted,
-                                    failed + 1
+                                    failed + 1,
+                                    photosUploaded,
+                                    photosFailed
                             );
                             return;
                         }
@@ -560,23 +566,30 @@ public class ProblemReportScreen extends ScrollView {
                                 serverReportId
                         );
 
-                        if (saved) {
-                            syncReportsSequentially(
-                                    reports,
-                                    index + 1,
-                                    serverFarmerId,
-                                    submitted + 1,
-                                    failed
-                            );
-                        } else {
+                        if (!saved) {
                             syncReportsSequentially(
                                     reports,
                                     index + 1,
                                     serverFarmerId,
                                     submitted,
-                                    failed + 1
+                                    failed + 1,
+                                    photosUploaded,
+                                    photosFailed
                             );
+                            return;
                         }
+
+                        // Upload this report's photo after saving its server ID.
+                        syncPhotoThenContinue(
+                                reports,
+                                index,
+                                serverFarmerId,
+                                serverReportId,
+                                submitted + 1,
+                                failed,
+                                photosUploaded,
+                                photosFailed
+                        );
                     }
 
                     @Override
@@ -592,17 +605,135 @@ public class ProblemReportScreen extends ScrollView {
                                 index + 1,
                                 serverFarmerId,
                                 submitted,
-                                failed + 1
+                                failed + 1,
+                                photosUploaded,
+                                photosFailed
                         );
                     }
                 }
         );
     }
 
+    private void syncPhotoThenContinue(
+            List<FarmProblemReport> reports,
+            int index,
+            long serverFarmerId,
+            long serverReportId,
+            int submitted,
+            int failed,
+            int photosUploaded,
+            int photosFailed
+    ) {
+        FarmProblemReport report = reports.get(index);
+        String photoUriString = report.getPhotoUri();
+        String photoStatus = report.getPhotoSyncStatus();
+
+        // No photo, or one already uploaded successfully: move on.
+        if (photoUriString == null
+                || photoUriString.trim().isEmpty()
+                || "synced".equalsIgnoreCase(photoStatus)) {
+            syncReportsSequentially(
+                    reports,
+                    index + 1,
+                    serverFarmerId,
+                    submitted,
+                    failed,
+                    photosUploaded,
+                    photosFailed
+            );
+            return;
+        }
+
+        database.updatePhotoSyncState(
+                report.getId(),
+                "syncing",
+                ""
+        );
+
+        syncStatusText.setText(
+                "Uploading photo for report "
+                        + (index + 1)
+                        + " of "
+                        + reports.size()
+                        + "..."
+        );
+
+        activity.getApiClient().uploadProblemReportPhoto(
+                serverFarmerId,
+                serverReportId,
+                Uri.parse(photoUriString),
+                new AgriflowApiClient.Callback() {
+                    @Override
+                    public void onSuccess(JSONObject response) {
+                        JSONObject remotePhoto =
+                                response.optJSONObject("photo");
+
+                        if (remotePhoto == null) {
+                            database.updatePhotoSyncState(
+                                    report.getId(),
+                                    "failed",
+                                    "The server returned an unexpected photo response."
+                            );
+
+                            syncReportsSequentially(
+                                    reports,
+                                    index + 1,
+                                    serverFarmerId,
+                                    submitted,
+                                    failed,
+                                    photosUploaded,
+                                    photosFailed + 1
+                            );
+                            return;
+                        }
+
+                        boolean saved = database.updatePhotoSyncState(
+                                report.getId(),
+                                "synced",
+                                ""
+                        );
+
+                        syncReportsSequentially(
+                                reports,
+                                index + 1,
+                                serverFarmerId,
+                                submitted,
+                                failed,
+                                saved ? photosUploaded + 1 : photosUploaded,
+                                saved ? photosFailed : photosFailed + 1
+                        );
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        database.updatePhotoSyncState(
+                                report.getId(),
+                                "failed",
+                                message
+                        );
+
+                        syncReportsSequentially(
+                                reports,
+                                index + 1,
+                                serverFarmerId,
+                                submitted,
+                                failed,
+                                photosUploaded,
+                                photosFailed + 1
+                        );
+                    }
+                }
+        );
+    }
+    private void syncPhotoThenContinue(){}
+
+
     private void finishSynchronization(
             int total,
             int submitted,
-            int failed
+            int failed,
+            int photosUploaded,
+            int photosFailed
     ) {
         String message;
 
@@ -615,14 +746,18 @@ public class ProblemReportScreen extends ScrollView {
                     + submitted
                     + " report(s) submitted; "
                     + failed
-                    + " failed.";
+                    + " report(s) failed.";
         }
 
-        if (failed > 0) {
-            message += " Failed reports remain on this phone for retry.";
-        }
+        message += " Photos uploaded: "
+                + photosUploaded
+                + "; photo uploads failed: "
+                + photosFailed
+                + ".";
 
-        message += " Photo synchronization is still pending.";
+        if (failed > 0 || photosFailed > 0) {
+            message += " Failed items remain on this phone for retry.";
+        }
 
         preferences.edit()
                 .putString("last_sync_message", message)
