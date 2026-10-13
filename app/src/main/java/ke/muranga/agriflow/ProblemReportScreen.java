@@ -27,6 +27,8 @@ import android.widget.Toast;
 import androidx.core.content.FileProvider;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -39,6 +41,11 @@ public class ProblemReportScreen extends ScrollView {
 
     private static final int REQUEST_CAMERA = 8101;
     private static final int REQUEST_GALLERY = 8102;
+
+    private static final String PREF_PENDING_CAMERA_FILE =
+            "problem_report_pending_camera_file";
+    private static final String PREF_PENDING_CAMERA_URI =
+            "problem_report_pending_camera_uri";
 
     private final MainActivity activity;
     private final LinearLayout content;
@@ -248,9 +255,8 @@ public class ProblemReportScreen extends ScrollView {
 
         note.addView(
                 activity.text(
-                        "Reports are saved on this phone first. Use Sync with county "
-                                + "when a connection is available. Photo synchronization "
-                                + "will be completed separately.",
+                        "Reports and attached photos are saved on this phone first. "
+                                + "Use Sync with county when a connection is available.",
                         13,
                         R.color.text_primary,
                         Typeface.NORMAL
@@ -725,8 +731,6 @@ public class ProblemReportScreen extends ScrollView {
                 }
         );
     }
-    private void syncPhotoThenContinue(){}
-
 
     private void finishSynchronization(
             int total,
@@ -1277,6 +1281,18 @@ public class ProblemReportScreen extends ScrollView {
                     )
             );
 
+            // Keep the output location recoverable if Android recreates this screen.
+            preferences.edit()
+                    .putString(
+                            PREF_PENDING_CAMERA_FILE,
+                            pendingCameraFile.getAbsolutePath()
+                    )
+                    .putString(
+                            PREF_PENDING_CAMERA_URI,
+                            pendingCameraUri.toString()
+                    )
+                    .apply();
+
             activity.startActivityForResult(
                     intent,
                     REQUEST_CAMERA
@@ -1284,12 +1300,7 @@ public class ProblemReportScreen extends ScrollView {
 
         } catch (Exception e) {
 
-            if (pendingCameraFile != null) {
-                pendingCameraFile.delete();
-            }
-
-            pendingCameraFile = null;
-            pendingCameraUri = null;
+            clearPendingCameraCapture(true);
 
             Toast.makeText(
                     activity,
@@ -1343,78 +1354,183 @@ public class ProblemReportScreen extends ScrollView {
             return;
         }
 
-        if (resultCode != Activity.RESULT_OK) {
+        // Some camera apps return RESULT_CANCELED even after writing the
+        // EXTRA_OUTPUT file. Trust a valid image file rather than resultCode alone.
+        if (requestCode == REQUEST_CAMERA) {
+            restorePendingCameraCapture();
 
-            if (requestCode == REQUEST_CAMERA) {
+            boolean usablePhoto = hasUsableCameraFile();
 
-                if (pendingCameraFile != null) {
-                    pendingCameraFile.delete();
-                }
+            // A few camera implementations provide only a thumbnail in the
+            // returned Intent. Save that thumbnail as a fallback if needed.
+            if (!usablePhoto && saveCameraThumbnailFallback(data)) {
+                usablePhoto = hasUsableCameraFile();
+            }
 
-                pendingCameraFile = null;
-                pendingCameraUri = null;
-
+            if (usablePhoto && pendingCameraUri != null) {
+                Uri capturedUri = pendingCameraUri;
+                selectedPhotoUri = capturedUri;
+                clearPendingCameraCapture(false);
+                showPhotoPreview(capturedUri);
+            } else {
+                clearPendingCameraCapture(true);
                 showPhotoPreview(selectedPhotoUri);
+
+                Toast.makeText(
+                        activity,
+                        "The camera did not provide a usable image. "
+                                + "Please try again or choose a photo.",
+                        Toast.LENGTH_LONG
+                ).show();
             }
 
             return;
         }
 
-        if (requestCode == REQUEST_CAMERA) {
-
-            if (pendingCameraUri != null) {
-
-                selectedPhotoUri = pendingCameraUri;
-
-                pendingCameraUri = null;
-                pendingCameraFile = null;
-
-                showPhotoPreview(selectedPhotoUri);
-            }
-
-        } else if (requestCode == REQUEST_GALLERY) {
-
-            if (data == null || data.getData() == null) {
-                return;
-            }
-
-            Uri chosenUri = data.getData();
-
-            int grantedFlags =
-                    data.getFlags()
-                            & (Intent.FLAG_GRANT_READ_URI_PERMISSION
-                            | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-
-            try {
-
-
-                int persistableFlags = grantedFlags
-                        & (Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-
-                if (persistableFlags != 0) {
-                    try {
-                        activity.getContentResolver()
-                                .takePersistableUriPermission(
-                                        chosenUri,
-                                        persistableFlags
-                                );
-                    } catch (SecurityException exception) {
-                        // Some URI providers do not support persistent permissions.
-                        // Keep using the URI with the permission currently available.
-                    }
-                }
-
-
-            } catch (SecurityException ignored) {
-                // If persistence is unavailable, keep the granted URI
-                // for this session. We do not block the report.
-            }
-
-            selectedPhotoUri = chosenUri;
-
-            showPhotoPreview(selectedPhotoUri);
+        // A canceled gallery picker should not change the current selection.
+        if (resultCode != Activity.RESULT_OK
+                || data == null
+                || data.getData() == null) {
+            return;
         }
+
+        Uri chosenUri = data.getData();
+
+        int grantedFlags = data.getFlags()
+                & (Intent.FLAG_GRANT_READ_URI_PERMISSION
+                | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+
+        if (grantedFlags != 0) {
+            try {
+                activity.getContentResolver()
+                        .takePersistableUriPermission(
+                                chosenUri,
+                                grantedFlags
+                        );
+            } catch (SecurityException ignored) {
+                // Providers that do not support persistent grants may still
+                // allow access for the current session.
+            }
+        }
+
+        selectedPhotoUri = chosenUri;
+        showPhotoPreview(selectedPhotoUri);
+    }
+
+    private void restorePendingCameraCapture() {
+        if (pendingCameraFile == null) {
+            String savedPath = preferences.getString(
+                    PREF_PENDING_CAMERA_FILE,
+                    ""
+            );
+
+            if (!savedPath.trim().isEmpty()) {
+                pendingCameraFile = new File(savedPath);
+            }
+        }
+
+        if (pendingCameraUri == null) {
+            String savedUri = preferences.getString(
+                    PREF_PENDING_CAMERA_URI,
+                    ""
+            );
+
+            if (!savedUri.trim().isEmpty()) {
+                pendingCameraUri = Uri.parse(savedUri);
+            } else if (pendingCameraFile != null) {
+                try {
+                    pendingCameraUri = FileProvider.getUriForFile(
+                            activity,
+                            activity.getPackageName() + ".fileprovider",
+                            pendingCameraFile
+                    );
+                } catch (IllegalArgumentException ignored) {
+                    // The path may no longer be covered by FileProvider.
+                }
+            }
+        }
+    }
+
+    private boolean hasUsableCameraFile() {
+        if (pendingCameraFile == null
+                || !pendingCameraFile.isFile()
+                || pendingCameraFile.length() <= 0) {
+            return false;
+        }
+
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inJustDecodeBounds = true;
+
+        BitmapFactory.decodeFile(
+                pendingCameraFile.getAbsolutePath(),
+                options
+        );
+
+        return options.outWidth > 0 && options.outHeight > 0;
+    }
+
+    private boolean saveCameraThumbnailFallback(Intent data) {
+        if (data == null
+                || data.getExtras() == null
+                || pendingCameraFile == null) {
+            return false;
+        }
+
+        Object thumbnailValue = data.getExtras().get("data");
+        if (!(thumbnailValue instanceof Bitmap)) {
+            return false;
+        }
+
+        Bitmap thumbnail = (Bitmap) thumbnailValue;
+
+        try (FileOutputStream output =
+                     new FileOutputStream(pendingCameraFile, false)) {
+            return thumbnail.compress(
+                    Bitmap.CompressFormat.JPEG,
+                    90,
+                    output
+            );
+        } catch (IOException exception) {
+            return false;
+        }
+    }
+
+    private void clearPendingCameraCapture(boolean deleteFile) {
+        File fileToClear = pendingCameraFile;
+
+        if (fileToClear == null) {
+            String savedPath = preferences.getString(
+                    PREF_PENDING_CAMERA_FILE,
+                    ""
+            );
+
+            if (!savedPath.trim().isEmpty()) {
+                fileToClear = new File(savedPath);
+            }
+        }
+
+        if (deleteFile && fileToClear != null && fileToClear.exists()) {
+            // Never delete a selected photo that has been accepted by the form.
+            String selectedUri = selectedPhotoUri == null
+                    ? ""
+                    : selectedPhotoUri.toString();
+            String pendingUri = pendingCameraUri == null
+                    ? preferences.getString(PREF_PENDING_CAMERA_URI, "")
+                    : pendingCameraUri.toString();
+
+            if (!pendingUri.equals(selectedUri)) {
+                // This file is only a temporary camera capture.
+                fileToClear.delete();
+            }
+        }
+
+        pendingCameraFile = null;
+        pendingCameraUri = null;
+
+        preferences.edit()
+                .remove(PREF_PENDING_CAMERA_FILE)
+                .remove(PREF_PENDING_CAMERA_URI)
+                .apply();
     }
 
     private void showPhotoPreview(Uri uri) {
@@ -1667,8 +1783,40 @@ public class ProblemReportScreen extends ScrollView {
 
                 card.addView(photoNote);
             }
-        }
 
+            String photoStatusMessage;
+            int photoStatusColor = R.color.text_secondary;
+            String photoSyncStatus = report.getPhotoSyncStatus();
+
+            if ("synced".equalsIgnoreCase(photoSyncStatus)) {
+                photoStatusMessage = "Photo uploaded to county";
+                photoStatusColor = R.color.brand_green;
+            } else if ("failed".equalsIgnoreCase(photoSyncStatus)) {
+                photoStatusMessage =
+                        "Photo upload failed • Tap Sync with county to retry.";
+            } else if ("syncing".equalsIgnoreCase(photoSyncStatus)) {
+                photoStatusMessage = "Uploading photo...";
+            } else {
+                photoStatusMessage =
+                        "Photo saved locally • Awaiting upload";
+            }
+
+            TextView photoStatus = activity.text(
+                    photoStatusMessage,
+                    12,
+                    photoStatusColor,
+                    Typeface.BOLD
+            );
+
+            photoStatus.setPadding(
+                    0,
+                    activity.dp(6),
+                    0,
+                    activity.dp(8)
+            );
+
+            card.addView(photoStatus);
+        }
 
         String statusMessage;
         int statusColor = R.color.text_secondary;
