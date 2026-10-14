@@ -121,6 +121,18 @@ public class HomeScreen extends ScrollView {
 
         content.addView(welcome);
 
+        // County-managed agricultural photo gallery (image-only carousel).
+        HomeGalleryView homeGallery = new HomeGalleryView(activity);
+        content.addView(
+                homeGallery,
+                activity.marginParams(
+                        18,
+                        0,
+                        18,
+                        12
+                )
+        );
+
         // --------------------------------------------------------
         // HERO
         // --------------------------------------------------------
