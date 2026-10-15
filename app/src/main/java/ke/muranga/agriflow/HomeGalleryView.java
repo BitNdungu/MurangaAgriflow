@@ -55,9 +55,9 @@ public final class HomeGalleryView extends LinearLayout {
     private static final String GALLERY_ENDPOINT = "/api/gallery";
     private static final long AUTO_ADVANCE_MS = 5000L;
     // A subtle Ken Burns motion: a 3% scale range avoids aggressive cropping.
-    private static final long ZOOM_CYCLE_MS = 7000L;
+    private static final long ZOOM_CYCLE_MS = 5000L;
     private static final float MIN_ZOOM_SCALE = 1.0f;
-    private static final float MAX_ZOOM_SCALE = 1.03f;
+    private static final float MAX_ZOOM_SCALE = 1.04f;
     private static final long REFRESH_INTERVAL_MS = 5 * 60 * 1000L;
     private static final int CONNECT_TIMEOUT_MS = 7000;
     private static final int READ_TIMEOUT_MS = 12000;

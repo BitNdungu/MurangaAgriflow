@@ -1,18 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.MurangaAgriflow"
-        parent="Theme.MaterialComponents.DayNight.NoActionBar">
-
+    <style name="Theme.MurangaAgriflow" parent="Theme.MaterialComponents.DayNight.NoActionBar">
         <item name="colorPrimary">@color/brand_green</item>
         <item name="colorPrimaryDark">@color/brand_green_dark</item>
         <item name="colorAccent">@color/brand_green</item>
-
         <item name="android:statusBarColor">@color/status_bar</item>
         <item name="android:navigationBarColor">@color/background</item>
-
         <item name="android:windowLightStatusBar">false</item>
-
     </style>
-
+    <style name="Theme.MurangaAgriflow.Splash" parent="@style/Theme.MurangaAgriflow">
+        <item name="android:navigationBarColor">@color/brand_green</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/brand_green</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/brand_green</item>
+        <item name="android:navigationBarColor">@color/agriflow_splash_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/agriflow_splash_background</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/agriflow_splash_background</item>
+        <item name="android:navigationBarColor">@color/agriflow_splash_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">@color/agriflow_splash_background</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowBackground">@color/agriflow_splash_background</item>
+    </style>
 </resources>
